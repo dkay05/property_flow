@@ -1,0 +1,1131 @@
+# Replit Build Prompt: Real Estate CRM
+
+## Project Overview
+
+**Product Name:** PropertyFlow (Real Estate CRM)
+
+**One-line Description:** A simple but powerful real estate CRM that helps small teams never lose leads, track deals from inquiry to closure, manage properties, and see real-time business metrics.
+
+**Business Context:** 
+- 2-5 person real estate team
+- Manage all property types (Residential, Commercial, Rental, Land)
+- Currently using WhatsApp, Excel, Paper — everything scattered
+- Pain points: Leads falling through cracks, no pipeline visibility, duplicate records, no reporting
+
+**Three User Roles:**
+1. **Sales Agent** (Rajesh) — Captures leads, shows properties, follows up, closes deals
+2. **Team Lead** (Priya) — Manages agents, assigns leads, coaches, reports to owner
+3. **Business Owner** (Vikram) — Wants dashboards and revenue metrics
+
+---
+
+## Design System (Neo-Brutalist)
+
+### Color Palette
+```
+Primary Yellow:    #ffe17c  (hero actions, highlights, important badges)
+Charcoal Dark:     #171e19  (navigation, dark sections, text)
+Sage Accent:       #b7c6c2  (secondary buttons, muted info, disabled states)
+White:             #ffffff  (cards, modals, content areas)
+Black:             #000000  (text, borders, shadows, all icons)
+Red Alert:         #ff4444  (overdue, at-risk, urgent statuses)
+Green Success:     #22c55e  (closed deals, completed tasks, healthy status)
+Yellow Warning:    #eab308  (at-risk, stalled deals, requires attention)
+Blue Info:         #3b82f6  (informational badges, secondary highlights)
+Gray:              #9ca3af  (disabled, inactive, secondary text)
+```
+
+### Typography
+```
+Headings:    Cabinet Grotesk, Weight 800 (Extrabold)
+             Letter-spacing: tighter (tracking-tighter in Tailwind)
+             Used for: Screen titles, section headers, dashboard metrics
+
+Body Text:   Satoshi, Weight 500 (Medium)
+             Used for: Task descriptions, client names, property details, general content
+
+Buttons:     Satoshi, Weight 700 (Bold)
+             Used for: All clickable buttons, CTAs
+
+Labels:      Satoshi, Weight 500 (Medium)
+             Used for: Field labels, badges, tags
+
+Small Text:  Satoshi, Weight 400 (Regular)
+             Used for: Timestamps, helper text, secondary info
+```
+
+### UI Elements & Borders
+
+**Standard Card:**
+```
+Border: 2px solid #000000
+Shadow: 4px 4px 0px 0px #000000
+Padding: 16px
+No border-radius (hard corners)
+```
+
+**Large Container (Modal, Dashboard panel):**
+```
+Border: 2px solid #000000
+Shadow: 8px 8px 0px 0px #000000
+Padding: 24px
+```
+
+**All Buttons:**
+```
+Border: 2px solid #000000
+Shadow: 4px 4px 0px 0px #000000
+Padding: 12px 24px
+Font: Satoshi Bold 14px
+
+Normal state: shadow visible
+Hover (Web): transform translate(4px, 4px), shadow removed
+Tap (Mobile): transform scale(0.95), transition 0.05s
+```
+
+**Input Fields:**
+```
+Border: 2px solid #000000
+No shadow
+Padding: 12px 16px
+Focus: box-shadow 0 0 0 3px #ffe17c
+Background: #ffffff
+```
+
+**Status Badge:**
+```
+Pill-shaped with 2px border
+Padding: 6px 12px
+Font: Satoshi Bold 12px
+Examples:
+  - Inquiry: #ffffff bg, #000000 border, black text
+  - Site Visit: #ffe17c bg, #000000 border, black text
+  - Negotiation: #eab308 bg, #000000 border, black text
+  - Offer: #ffe17c bg, #000000 border, black text
+  - Closed: #22c55e bg, #000000 border, white text
+  - Dead: #9ca3af bg, #000000 border, white text
+```
+
+**Yellow Background Pattern:**
+- 32px × 32px radial dot grid
+- Opacity: 10%
+- Applied to all #ffe17c backgrounds
+- Creates subtle texture without distraction
+
+### Status Colors in Lists
+```
+Red card borders for at-risk/overdue items
+Yellow tint for warning/attention needed
+Green checkmarks for completed items
+```
+
+---
+
+## Core Features & Pages
+
+### 1. Authentication Pages
+
+#### /login
+```
+Simple login screen:
+- Title: "PropertyFlow"
+- Tagline: "Real Estate CRM Made Simple"
+- Phone number input
+- OTP button
+- Remember me checkbox
+- "Don't have account? Sign up" link
+
+Design:
+- Yellow (#ffe17c) background
+- White card in center with 2px border, 8px shadow
+- Big login button in charcoal
+```
+
+#### /signup
+```
+Sign up form:
+- Name
+- Phone number
+- Email (optional)
+- Password (for agent accounts)
+- Organization name (for owner accounts)
+- Checkbox: "I am a business owner" (if checked, show org setup)
+
+Design: Same as login, white card on yellow background
+```
+
+#### /otp-verify
+```
+OTP verification:
+- Message: "Enter 6-digit code sent to +91XXXXXXXXXX"
+- 6 input boxes (one digit each, auto-tab to next)
+- "Didn't receive code? Resend" link
+- "Back" button
+
+Design: White card, 2px border, 8px shadow
+```
+
+---
+
+### 2. Main Dashboard Pages
+
+#### /dashboard (Rajesh's Home)
+```
+What Rajesh sees when opening app:
+
+TOP SECTION (Status Cards):
+[Yellow card with 2px border, 4px shadow]
+┌─────────────────────────────────────┐
+│ TODAY                               │
+│ 3 NEW LEADS | 5 FOLLOW-UPS DUE     │
+│ ✓ 2 Done, ⏳ 3 Pending               │
+└─────────────────────────────────────┘
+
+QUICK ACTIONS (2 columns):
+[Charcoal button, white text] | [Sage button, black text]
++ Add Lead                     | 📅 My Schedule
+[4px shadow, 2px border]       | [Same styling]
+
+MY FOLLOW-UPS TODAY (List):
+┌─────────────────────────────────────┐
+│ 1:00 PM | Call Amit Kumar          │
+│         | Discussed 2BHK at XYZ    │
+│         | [Call button] [Done ✓]   │
+├─────────────────────────────────────┤
+│ 3:30 PM | Site Visit - Priya Singh │
+│         | 3BHK Commercial at ABC   │
+│         | [Navigate] [Done ✓]      │
+├─────────────────────────────────────┤
+│ ⏳ Pending | WhatsApp Mr. Verma     │
+│           | Send price quote       │
+│           | [Complete] [Snooze]    │
+└─────────────────────────────────────┘
+
+MY RECENT LEADS (List):
+┌─────────────────────────────────────┐
+│ Amit Kumar | +919876543210         │
+│ Inquiry | Looking for 2BHK         │
+│ Budget: ₹30-40 Lakhs | Bangalore  │
+│ [View Profile →]                  │
+├─────────────────────────────────────┤
+│ Priya Singh | +919876543211        │
+│ Site Visit | Viewed ABC Apts       │
+│ Budget: ₹50-60 Lakhs | Pune       │
+│ [View Profile →]                  │
+└─────────────────────────────────────┘
+
+BOTTOM: Big yellow "+" button (fixed, bottom-right)
+```
+
+#### /dashboard/priya (Team Lead's Home)
+```
+What Priya sees:
+
+TOP METRICS (4 cards, 2x2 grid):
+┌────────────────────┬────────────────────┐
+│ Leads This Month   │ Conversion Rate    │
+│ 18 new inquiries  │ 33% (6/18 closed) │
+│ ↑ +30% vs last mo  │ ↑ +5% vs last mo   │
+├────────────────────┼────────────────────┤
+│ Revenue This Mo    │ Pending Closures   │
+│ ₹18.5 Lakhs       │ 3 deals (₹5L+)    │
+│ ↑ +20% vs target   │ Expected this wk   │
+└────────────────────┴────────────────────┘
+
+TEAM WORKLOAD:
+┌─────────────────────────────────────┐
+│ Team Member | Tasks | Deals | Status│
+├─────────────────────────────────────┤
+│ Rajesh      | 8   │ 2    | ✓ Ok  │
+│ Vikram      | 5   │ 1    | ✓ Ok  │
+│ (No teams yet - add first agent)    │
+└─────────────────────────────────────┘
+
+PIPELINE OVERVIEW:
+[Inquiry:8] → [Site Visit:5] → [Negotiation:3] → [Offer:2] → [Closed:6]
+
+AT-RISK ALERTS (Red cards):
+┌─────────────────────────────────────┐
+│ ⚠️ STALLED DEAL                     │
+│ Amit Kumar - 2BHK Pune              │
+│ Status: Negotiation for 8 days      │
+│ Last update: 5 days ago             │
+│ [View →]                            │
+├─────────────────────────────────────┤
+│ ⚠️ OVERDUE FOLLOW-UP               │
+│ Priya Singh - 3BHK Commercial       │
+│ Follow-up due 2 days ago            │
+│ [Do Now →]                          │
+└─────────────────────────────────────┘
+```
+
+#### /dashboard/vikram (Owner's Home)
+```
+What Vikram (owner) sees:
+
+EXECUTIVE DASHBOARD:
+┌────────────────────────────────┐
+│ This Month Performance         │
+├────────────────────────────────┤
+│ Revenue: ₹24.5 Lakhs           │
+│ Target: ₹25 Lakhs              │
+│ % Complete: 98% ✓              │
+└────────────────────────────────┘
+
+4 KEY METRICS (Large cards):
+┌────────────────────┬────────────────────┐
+│ Deals Closed       │ Deals Pipeline     │
+│ 8 deals           │ 10 pending deals   │
+│ ₹24.5L commission │ ₹60L value         │
+├────────────────────┼────────────────────┤
+│ Avg Deal Size      │ Conversion Rate    │
+│ ₹3.06L            │ 42% (8/19)         │
+└────────────────────┴────────────────────┘
+
+TOP AGENT (This Month):
+[Yellow card] Rajesh: 6 deals, ₹18L commission
+
+PROPERTY PERFORMANCE:
+2BHK: 50% conversion | Commercial: 25% | Rental: 40%
+
+REVENUE TREND (Last 6 months):
+[Simple bar chart showing monthly revenue]
+
+BOTTOM: "View Full Report" button
+```
+
+---
+
+### 3. Lead Management Pages
+
+#### /leads (List view)
+```
+All leads in a table/list format:
+
+FILTERS (Top bar):
+[Status dropdown] [Source dropdown] [Search by name/phone]
+
+LIST:
+┌──────────────────────────────────────────────────┐
+│ Client Name  │ Phone    │ Status      │ Agent   │
+├──────────────────────────────────────────────────┤
+│ Amit Kumar   │ 9876... │ Negotiation │ Rajesh  │
+│ Priya Singh  │ 9876... │ Site Visit  │ Vikram  │
+│ Mr. Verma    │ 9876... │ Inquiry     │ Unassigned
+│ Neha Patel   │ 9876... │ Offer       │ Rajesh  │
+└──────────────────────────────────────────────────┘
+
+[+] Add New Lead button (bottom-right, yellow)
+```
+
+#### /leads/:id (Client Profile)
+```
+Complete client view:
+
+TOP SECTION:
+┌─────────────────────────────────────┐
+│ Amit Kumar                         │
+│ +91 98765 43210 | amit@email.com  │
+│                                    │
+│ Status: Negotiation | Assigned to: Rajesh
+│ Budget: ₹30-40 Lakhs              │
+│ Interest: 2BHK Residential, Bangalore
+│ Lead Source: Walk-in via Rajesh   │
+└─────────────────────────────────────┘
+
+QUICK ACTIONS:
+[Call] [SMS] [WhatsApp] [Schedule Visit] [Edit Profile]
+
+TIMELINE (Activity log):
+┌─────────────────────────────────────┐
+│ Mar 15, 2:30 PM                    │
+│ Rajesh: Created lead               │
+│ "Walk-in customer interested in   │
+│  2BHK in Bangalore"                │
+├─────────────────────────────────────┤
+│ Mar 15, 3:00 PM                    │
+│ Rajesh: Viewed property            │
+│ ABC Apartments, Koramangala        │
+│ Feedback: "Liked but budget issue" │
+├─────────────────────────────────────┤
+│ Mar 16, 11:00 AM                   │
+│ Rajesh: Called client              │
+│ "Discussed price reduction"        │
+├─────────────────────────────────────┤
+│ Mar 17, 4:30 PM                    │
+│ Rajesh: Sent offer                 │
+│ ₹38 Lakhs for ABC Apartments       │
+│ Client to confirm                  │
+├─────────────────────────────────────┤
+│ ⏳ Follow-up due tomorrow           │
+│ "Call to confirm offer acceptance" │
+│ [Done] [Snooze] [Reassign]         │
+└─────────────────────────────────────┘
+
+LINKED DEALS & PROPERTIES:
+┌─────────────────────────────────────┐
+│ Viewing: ABC Apartments, Koramangala│
+│ Price: ₹40 Lakhs                   │
+│ Area: 950 sq ft, 2BHK, Furnished   │
+│ [View Property →]                  │
+├─────────────────────────────────────┤
+│ DEAL: Offer made ₹38L              │
+│ Status: Awaiting acceptance        │
+│ Expected commission: ₹1.14L (3%)   │
+│ [View Deal →]                      │
+└─────────────────────────────────────┘
+
+NOTES:
+┌─────────────────────────────────────┐
+│ Client Preferences:                 │
+│ - Wife is decision maker            │
+│ - Budget fixed at ₹40L max         │
+│ - Prefers gym and parking           │
+│ - Can move within 2 weeks           │
+│                                     │
+│ [Edit notes]                        │
+└─────────────────────────────────────┘
+
+DUPLICATE WARNING (if applicable):
+[Yellow alert card]
+Possible duplicate: Amit Kumar created on Feb 20
+Phone and name match 95%
+[View other record] [Merge records]
+```
+
+---
+
+### 4. Property Management Pages
+
+#### /properties (List view)
+```
+All properties:
+
+FILTERS & SEARCH:
+[Type: All] [Status: Available] [City] [Search by address]
+
+PROPERTY CARDS (Grid or list):
+┌──────────────────────────────────────┐
+│ 🖼️ ABC Apartments, Koramangala     │
+│                                      │
+│ 2BHK | 950 sq ft | ₹40 Lakhs       │
+│ Furnished | Parking | Gym            │
+│ Available | Added 3 days ago        │
+│                                      │
+│ [View] [Show to Client] [Edit]     │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ 🖼️ XYZ Tower, Whitefield           │
+│                                      │
+│ 3BHK | 1250 sq ft | ₹50 Lakhs      │
+│ Semi-Furnished | Parking | Pool     │
+│ Available | Added 1 week ago        │
+│                                      │
+│ [View] [Show to Client] [Edit]     │
+└──────────────────────────────────────┘
+
+[+] Add New Property button
+```
+
+#### /properties/:id (Property Detail)
+```
+Single property view:
+
+PHOTO GALLERY:
+[Large main photo] [Thumbnails below: 5 more photos]
+
+PROPERTY INFO:
+┌──────────────────────────────────────┐
+│ ABC Apartments, Koramangala, Bangalore
+│                                      │
+│ 2BHK Apartment | Residential        │
+│ ₹40,00,000 (40 Lakhs)              │
+│ Status: Available                    │
+│                                      │
+│ Area: 950 sq ft | Floor: 5th       │
+│ Furnishing: Furnished               │
+│ Age: 8 years | Parking: 2 slots    │
+│ Amenities: Gym, Pool, Security      │
+│ Facing: East                        │
+│                                      │
+│ Owner: Rajesh Sharma                │
+│ Phone: +91 98765 43210             │
+└──────────────────────────────────────┘
+
+RECENT SHOWINGS:
+┌──────────────────────────────────────┐
+│ Amit Kumar | Mar 15 | Interested   │
+│ Priya Singh | Mar 16 | Not interested
+│ Neha Patel | Mar 17 | Very interested
+│ [View all showings →]               │
+└──────────────────────────────────────┘
+
+QUICK ACTIONS:
+[Edit Property] [Share Link] [Delete] [Show to Client]
+```
+
+---
+
+### 5. Pipeline / Deal Management Pages
+
+#### /pipeline (Kanban view)
+```
+Deal pipeline - drag-drop to update status:
+
+[INQUIRY]           [SITE VISIT]       [NEGOTIATION]
+[Lead 1]            [Lead 3]           [Lead 5]
+Amit Kumar          Priya Singh        Mr. Verma
+Budget: 30-40L      Budget: 50-60L     Budget: 45-55L
+Rajesh              Rajesh             Vikram
+[2 days in status]  [1 day in status]  ⚠️ 8 days - AT RISK
+Drag to move →      Drag to move →     Drag to move →
+
+[Lead 2]            [Lead 4]           [Lead 6]
+Neha Patel          Another client     Next client
+Budget: 20-30L      Budget: 40-50L     Budget: 35-45L
+Unassigned          Rajesh             Rajesh
+New                 [3 days]           [5 days]
+
+
+[OFFER]             [CLOSED]           [DEAD LEADS]
+[Lead 7]            [Lead 8]           [Lead 9]
+Client 1            Closed Deal 1      Not interested
+Budget: 45L         ₹40L closed        Went elsewhere
+Rajesh              Commission: 1.2L   Lost lead
+⚠️ 10 days wait     Registered         [Reactivate?]
+
+┌────────────────────────────────────────┐
+│ Stats at bottom:                       │
+│ Total: 12 deals | Value: ₹500L        │
+│ Avg stage duration: 8 days             │
+│ Conversion rate: 67% (8/12 to closed) │
+└────────────────────────────────────────┘
+```
+
+#### /deals/:id (Deal Detail)
+```
+Single deal view:
+
+DEAL HEADER:
+┌─────────────────────────────────────┐
+│ Amit Kumar → ABC Apartments         │
+│                                    │
+│ Status: Negotiation | Day 8        │
+│ Offer Price: ₹38 Lakhs             │
+│ Commission: ₹1.14L (3%) - Pending │
+└─────────────────────────────────────┘
+
+DEAL TIMELINE:
+┌─────────────────────────────────────┐
+│ Mar 15: Inquiry created            │
+│ Mar 15: Client shown property      │
+│ Mar 16: 1st price discussion       │
+│ Mar 17: Formal offer sent (₹38L)  │
+│ ⏳ Awaiting client response        │
+│                                    │
+│ Expected closing: Mar 25           │
+│ Commission paid: Pending           │
+└─────────────────────────────────────┘
+
+CLIENT & PROPERTY INFO:
+[Client card] [Property card]
+
+ACTIONS:
+[Update Status] [Send Offer] [Mark Closed] [Notes]
+```
+
+---
+
+### 6. Follow-up & Task Pages
+
+#### /follow-ups (My tasks)
+```
+All follow-ups for current user:
+
+STATUS TABS: [Pending] [Done Today] [Overdue]
+
+PENDING (5):
+┌─────────────────────────────────────┐
+│ TODAY 1:00 PM                       │
+│ 📞 Call Amit Kumar                  │
+│ "Confirm if interested in offer"   │
+│ [Done] [Snooze] [Reassign]         │
+├─────────────────────────────────────┤
+│ TODAY 3:30 PM                       │
+│ 🏠 Site visit - Priya Singh        │
+│ "3BHK showing at XYZ Tower"        │
+│ [Done] [Navigate] [Reassign]       │
+├─────────────────────────────────────┤
+│ TOMORROW 2:00 PM                    │
+│ 📨 Send quotation to Mr. Verma     │
+│ "Email price quote for 2BHK"       │
+│ [Done] [Send Now] [Snooze]         │
+└─────────────────────────────────────┘
+
+OVERDUE (2):
+┌─────────────────────────────────────┐
+│ ⚠️ 2 DAYS OVERDUE                  │
+│ 📞 Call Neha Patel                 │
+│ "Status check on offer"             │
+│ [Done] [Reschedule] [Reassign]     │
+└─────────────────────────────────────┘
+```
+
+#### /tasks (Team view - Manager only)
+```
+All team tasks - Priya sees:
+
+FILTERS: [Assigned to: All] [Status: Pending] [Priority: All]
+
+TABLE VIEW:
+┌──────────────────────────────────────────────┐
+│ Task | Agent | Due | Priority | Status      │
+├──────────────────────────────────────────────┤
+│ Follow up | Rajesh | Today | High | Pending │
+│ Lead assign| Rajesh | Today | High | Done ✓ │
+│ Doc collect| Vikram | Tomorrow | Med | Pend│
+│ Site visit | Rajesh | Tomorrow | High | Pend│
+└──────────────────────────────────────────────┘
+
+[+ Assign New Task]
+```
+
+---
+
+### 7. Settings & Admin Pages
+
+#### /settings/profile
+```
+Current user profile:
+
+┌─────────────────────────────────────┐
+│ 👤 Rajesh Kumar                    │
+│ +91 98765 43210                    │
+│ rajesh@company.com                 │
+│                                    │
+│ Role: Sales Agent                  │
+│ Joined: Jan 15, 2024               │
+│ Properties sold: 24                │
+│ Total commission earned: ₹12.5L   │
+│                                    │
+│ [Edit Profile] [Change Password]   │
+│ [Notification Settings]            │
+└─────────────────────────────────────┘
+```
+
+#### /settings/team (Manager/Owner only)
+```
+Team management:
+
+┌─────────────────────────────────────┐
+│ Team Members (3)                   │
+├─────────────────────────────────────┤
+│ Rajesh | Agent | Joined Jan 15    │
+│ [View] [Edit] [Remove]             │
+├─────────────────────────────────────┤
+│ Vikram | Agent | Joined Feb 1     │
+│ [View] [Edit] [Remove]             │
+├─────────────────────────────────────┤
+│ Priya | Team Lead | Owner account  │
+│ [View] [Edit]                      │
+└─────────────────────────────────────┘
+
+[+ Invite Team Member]
+```
+
+#### /settings/organization (Owner only)
+```
+Organization settings:
+
+Business Name: PropertyFlow Real Estate
+Phone: +91 98765 43200
+Email: hello@propertyflow.in
+Address: 123 MG Road, Bangalore
+
+[Edit]
+
+Subscription Plan: Pro (5 team members)
+Billing: ₹9,999/month
+[Upgrade] [Cancel]
+```
+
+---
+
+## API Endpoints
+
+### Authentication
+```
+POST /api/auth/signup
+  { name, phone, email, password, is_owner, org_name }
+  → { user, token, org }
+
+POST /api/auth/send-otp
+  { phone }
+  → { message, expires_in }
+
+POST /api/auth/verify-otp
+  { phone, otp }
+  → { user, token, org }
+
+POST /api/auth/login
+  { phone, password }
+  → { user, token, org }
+
+POST /api/auth/logout
+  → { message }
+```
+
+### Clients/Leads
+```
+POST /api/clients
+  { name, phone, email, client_type, budget_min, budget_max, property_type_interested, source }
+  → { client }
+
+GET /api/clients
+  ?status=inquiry&assigned_to=rajesh&search=amit
+  → { clients[], total_count }
+
+GET /api/clients/:id
+  → { client, activities[], deals[], follow_ups[] }
+
+PUT /api/clients/:id
+  { name, phone, status, assigned_to, notes }
+  → { client }
+
+GET /api/clients/duplicates/check
+  ?phone=9876543210&name=amit
+  → { possible_duplicates[] }
+
+POST /api/clients/:id/merge
+  { merge_with_client_id }
+  → { merged_client }
+```
+
+### Properties
+```
+POST /api/properties
+  { address, area, city, property_type, bedrooms, bathrooms, price, status, description, amenities }
+  → { property }
+
+GET /api/properties
+  ?type=residential&status=available&city=bangalore&min_price=20&max_price=50
+  → { properties[], total_count }
+
+GET /api/properties/:id
+  → { property, images[], recent_showings[] }
+
+PUT /api/properties/:id
+  { price, status, description, amenities }
+  → { property }
+
+POST /api/properties/:id/images
+  { images: [file, file] }
+  → { property_images[] }
+
+DELETE /api/properties/:id/images/:image_id
+  → { message }
+```
+
+### Deals
+```
+POST /api/deals
+  { client_id, property_id, offer_price, commission_rate, expected_closing_date }
+  → { deal }
+
+GET /api/deals
+  ?status=negotiation&agent_id=rajesh
+  → { deals[], total_count, total_pipeline_value }
+
+GET /api/deals/:id
+  → { deal, client, property, activities[] }
+
+PUT /api/deals/:id
+  { status, offer_price, commission_status, commission_paid_amount }
+  → { deal }
+
+GET /api/deals/pipeline/summary
+  → { inquiry_count, site_visit_count, negotiation_count, offer_count, closed_count }
+```
+
+### Activities/Timeline
+```
+POST /api/activities
+  { client_id, property_id, activity_type, description }
+  → { activity }
+
+GET /api/clients/:id/activities
+  → { activities[] }
+```
+
+### Follow-ups & Tasks
+```
+POST /api/follow-ups
+  { client_id, follow_up_type, follow_up_date, follow_up_time, notes, assigned_to }
+  → { follow_up }
+
+GET /api/follow-ups
+  ?status=pending&assigned_to=current_user&date_from=2024-03-15
+  → { follow_ups[] }
+
+PUT /api/follow-ups/:id
+  { status, snooze_until_date }
+  → { follow_up }
+
+POST /api/tasks
+  { title, task_type, assigned_to, client_id, property_id, due_date, priority }
+  → { task }
+
+GET /api/tasks
+  ?status=pending&assigned_to=all
+  → { tasks[] }
+
+PUT /api/tasks/:id
+  { status, priority }
+  → { task }
+```
+
+### Dashboard & Reports
+```
+GET /api/dashboard/agent/:user_id
+  → { today_follow_ups, recent_leads, stats }
+
+GET /api/dashboard/manager/:org_id
+  → { metrics, team_workload, pipeline, at_risk_deals }
+
+GET /api/dashboard/owner/:org_id
+  → { revenue_metrics, agent_performance, property_performance, forecast }
+
+GET /api/reports/monthly
+  ?month=2024-03&org_id=1
+  → { leads_count, closures_count, revenue, commission_summary, agent_rankings }
+```
+
+### Notifications
+```
+GET /api/notifications
+  → { notifications[], unread_count }
+
+PUT /api/notifications/:id/read
+  → { notification }
+```
+
+---
+
+## Database Schema (SQL)
+
+[See Part 5 in the CRM Guide - copy those CREATE TABLE statements]
+
+---
+
+## UI Component Specifications
+
+### Big "+" Add Button (Floating Action Button)
+```jsx
+Fixed position, bottom-right corner
+Position: fixed, bottom: 24px, right: 24px
+Width: 56px, Height: 56px
+Circular shape: border-radius: 50%
+Background: #171e19 (Charcoal)
+Border: 2px solid #000000
+Shadow: 4px 4px 0px 0px #000000
+Icon: "+" in white (#ffffff), font-size: 28px, bold
+
+Hover (web):
+  transform: translate(4px, 4px)
+  box-shadow: none
+  transition: all 0.1s ease-out
+
+Tap (mobile):
+  transform: scale(0.95)
+  transition: transform 0.05s ease-out
+```
+
+### Lead Card (in list view)
+```
+Container: 100% width, white background, 2px border, 4px shadow
+Padding: 16px
+Margin-bottom: 12px
+
+Layout:
+- Header row: [Client name in Cabinet Grotesk] [Status badge]
+- Row 2: Phone + Email
+- Row 3: Budget range | Interest | Agent
+- Row 4: [Time in status] | [Quick actions]
+
+Status badge colors:
+  Inquiry: white bg, black border
+  Site Visit: yellow bg (#ffe17c)
+  Negotiation: yellow bg with darker border
+  Offer: yellow bg
+  Closed: green bg (#22c55e), white text
+```
+
+### Deal Pipeline Card (Kanban)
+```
+Card size: ~250px width
+Background: white
+Border: 2px solid #000000
+Shadow: 4px 4px 0px 0px #000000
+Padding: 12px
+Margin: 12px between cards
+
+At-risk card: Red left border (3px solid #ff4444)
+Stalled (5+ days): Red border, red "STALLED" badge
+
+Content:
+- Client name (Satoshi Bold, 14px)
+- Property address (Satoshi Regular, 12px)
+- Budget or price (Satoshi Medium, 12px)
+- Days in stage: (Gray text, 10px)
+- Agent avatar + name
+
+Hover: translate(2px, 2px) effect
+```
+
+### Status Badge (Pill-shaped)
+```
+Display: inline-block
+Padding: 6px 12px
+Border: 2px solid #000000
+Font: Satoshi Bold 12px
+Border-radius: 20px (pill shape)
+
+Color map:
+  Inquiry: #ffffff bg, #000000 text
+  Site Visit: #ffe17c bg, #000000 text
+  Negotiation: #eab308 bg (yellow-600), #000000 text
+  Offer: #ffe17c bg, #000000 text
+  Closed: #22c55e bg, #ffffff text
+  Dead: #9ca3af bg, #ffffff text
+```
+
+### Property Card (in list/grid)
+```
+Grid layout: 2 columns (responsive to 1 on mobile)
+Card width: ~300px
+Background: white
+Border: 2px solid #000000
+Shadow: 4px 4px 0px 0px #000000
+
+Content:
+- Property photo (300px x 200px, object-fit: cover)
+- Address (Cabinet Grotesk Bold, 14px)
+- Type + Area + Price (Satoshi Medium, 12px)
+- Amenities (small icons/text)
+- Status badge
+- Action buttons at bottom
+```
+
+### Dashboard Metric Card (Large)
+```
+Background: white
+Border: 2px solid #000000
+Shadow: 8px 8px 0px 0px #000000
+Padding: 24px
+Border-radius: 0
+
+Content:
+- Title (Cabinet Grotesk Bold, 14px)
+- Big metric number (Cabinet Grotesk Bold, 32px)
+- Trend indicator (↑↓, green/red text)
+- Comparison text
+
+Hover: translate(4px, 4px), shadow reduces to 4px
+```
+
+### Form Input
+```
+Border: 2px solid #000000
+Background: #ffffff
+Padding: 12px 16px
+Font: Satoshi Regular 14px
+Margin-bottom: 16px
+
+Focus state:
+  box-shadow: 0 0 0 3px #ffe17c
+  outline: none
+
+Error state:
+  border-color: #ff4444
+  background: rgba(255, 68, 68, 0.05)
+```
+
+### Primary Button
+```
+Background: #171e19 (Charcoal)
+Color: #ffffff (white text)
+Border: 2px solid #000000
+Padding: 12px 24px
+Font: Satoshi Bold 14px
+Shadow: 4px 4px 0px 0px #000000
+
+Hover:
+  transform: translate(4px, 4px)
+  box-shadow: none
+
+Disabled:
+  background: #9ca3af
+  cursor: not-allowed
+  transform: none
+```
+
+### Secondary Button (Sage)
+```
+Background: #b7c6c2 (Sage)
+Color: #000000 (black text)
+Border: 2px solid #000000
+Padding: 12px 24px
+Font: Satoshi Bold 14px
+Shadow: 4px 4px 0px 0px #000000
+
+Hover:
+  transform: translate(4px, 4px)
+  box-shadow: none
+```
+
+---
+
+## Seed/Demo Data
+
+Use this to test immediately:
+
+```sql
+-- Organizations
+INSERT INTO organizations (name, owner_id) VALUES
+(1, 'PropertyFlow Real Estate', 1);
+
+-- Users
+INSERT INTO users (name, phone, email, role, organization_id) VALUES
+(1, 'Vikram', '+919876543210', 'vikram@company.com', 'owner', 1),
+(2, 'Rajesh', '+919876543211', 'rajesh@company.com', 'agent', 1),
+(3, 'Priya', '+919876543212', 'priya@company.com', 'team_lead', 1),
+(4, 'Vikram', '+919876543213', 'vikram2@company.com', 'agent', 1);
+
+-- Properties
+INSERT INTO properties (organization_id, address, area, city, property_type, bedrooms, bathrooms, carpet_area, price, furnishing, status) VALUES
+(1, 'ABC Apartments, Koramangala', 'Koramangala', 'Bangalore', 'residential', 2, 2, 950, 4000000, 'fully_furnished', 'available'),
+(1, 'XYZ Tower, Whitefield', 'Whitefield', 'Bangalore', 'residential', 3, 3, 1250, 5000000, 'semi_furnished', 'available'),
+(1, 'Tech Park Building, MG Road', 'MG Road', 'Bangalore', 'commercial', NULL, NULL, 3000, 1500000, 'unfurnished', 'available');
+
+-- Clients
+INSERT INTO clients (organization_id, name, phone, client_type, budget_min, budget_max, property_type_interested, source, status, assigned_to) VALUES
+(1, 'Amit Kumar', '+919876543220', 'buyer', 3000000, 4000000, '2BHK', 'walk_in', 'negotiation', 2),
+(1, 'Priya Singh', '+919876543221', 'buyer', 5000000, 6000000, '3BHK', 'referral', 'site_visit', 2),
+(1, 'Neha Patel', '+919876543222', 'buyer', 2000000, 3000000, '2BHK', 'call', 'inquiry', 2),
+(1, 'Rajesh Sharma', '+919876543223', 'seller', NULL, NULL, NULL, 'walk_in', 'offer', 4);
+
+-- Deals
+INSERT INTO deals (organization_id, client_id, property_id, agent_id, offer_price, expected_commission_rate, expected_commission_amount) VALUES
+(1, 1, 1, 2, 3800000, 3.00, 114000),
+(1, 2, 2, 2, 4900000, 3.00, 147000),
+(1, 4, 1, 4, 3900000, 3.00, 117000);
+
+-- Follow-ups
+INSERT INTO follow_ups (organization_id, client_id, assigned_to, follow_up_type, follow_up_date, follow_up_time, notes, status) VALUES
+(1, 1, 2, 'call', CURDATE() + INTERVAL 0 DAY, '13:00:00', 'Confirm if interested in offer', 'pending'),
+(1, 2, 2, 'site_visit', CURDATE() + INTERVAL 0 DAY, '15:30:00', '3BHK showing at XYZ Tower', 'pending'),
+(1, 3, 2, 'whatsapp', CURDATE() + INTERVAL 1 DAY, NULL, 'Send property list', 'pending');
+```
+
+---
+
+## Tech Stack Recommendations
+
+**Backend:**
+- Node.js + Express.js
+- Database: PostgreSQL (better for complex queries)
+- Redis for caching, notifications
+- JWT authentication
+
+**Frontend:**
+- React.js for web
+- React Native for mobile (or use React Native Web for both)
+- Tailwind CSS + Custom CSS for Neo-Brutalist styling
+- Redux or Zustand for state management
+- React Query for API data fetching
+
+**Real-time:**
+- Socket.io for live notifications, real-time updates
+- Firebase Cloud Messaging for push notifications
+
+**Deployment:**
+- Backend: Heroku, Railway, or AWS
+- Database: PostgreSQL on AWS RDS or Heroku Postgres
+- Frontend: Vercel or Netlify
+- Storage: AWS S3 for property photos
+
+---
+
+## Build Order (Recommended Sequence)
+
+**Phase 1: Foundation (Week 1)**
+- [ ] Set up Express backend + PostgreSQL database
+- [ ] User authentication (signup, OTP, login)
+- [ ] Organization/team setup
+- [ ] Database seed script with demo data
+
+**Phase 2: Core Lead Management (Week 2)**
+- [ ] Lead capture API + UI (quick add form)
+- [ ] Client profile page with timeline
+- [ ] Duplicate detection logic
+- [ ] Client list view with filters
+
+**Phase 3: Pipeline Management (Week 3)**
+- [ ] Kanban pipeline UI (drag-drop)
+- [ ] Deal API endpoints
+- [ ] Update deal status (move through pipeline)
+- [ ] At-risk deal detection & alerts
+
+**Phase 4: Property Management (Week 3-4)**
+- [ ] Property database + CRUD
+- [ ] Property image upload
+- [ ] Property search & filters
+- [ ] Property detail page
+
+**Phase 5: Follow-ups & Tasks (Week 4)**
+- [ ] Follow-up creation & reminders
+- [ ] Task assignment
+- [ ] Follow-up dashboard
+- [ ] Notification system
+
+**Phase 6: Dashboards & Reports (Week 5)**
+- [ ] Agent dashboard
+- [ ] Manager dashboard (pipeline, team workload)
+- [ ] Owner dashboard (revenue, metrics)
+- [ ] Monthly reports
+
+**Phase 7: Polish & Deployment (Week 6)**
+- [ ] Mobile responsive design
+- [ ] Real-time updates (Socket.io)
+- [ ] Push notifications
+- [ ] Settings pages
+- [ ] Deploy to production
+
+---
+
+## Success Metrics
+
+Track these after launch:
+
+| Metric | Target |
+|--------|--------|
+| Time to capture lead | < 30 seconds |
+| Duplicate client records | 0 |
+| Leads in system (not lost) | 100% |
+| Deal visibility | All deals tracked through pipeline |
+| Follow-up completion rate | > 80% |
+| Time to generate monthly report | < 5 minutes |
+| Team adoption rate | 100% within 2 weeks |
+
+---
+
+**You're ready to build! Copy this entire prompt and paste it into Replit to start building your Real Estate CRM.**
+
+**Next Steps:**
+1. Review this with your team
+2. Share the design mockups with them
+3. Get feedback on feature priorities
+4. Start building in Replit!
+
+Good luck! 🚀
