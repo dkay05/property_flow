@@ -1,0 +1,1582 @@
+# Real Estate CRM - Advanced Features Enhancement Prompt for Replit
+
+**For use in existing Replit project - Add all features below to your current PropertyFlow CRM**
+
+---
+
+## Part 1: New Database Tables
+
+Add these tables to your existing PostgreSQL database:
+
+### Table 1: property_media (Images & Videos)
+```sql
+CREATE TABLE property_media (
+  id SERIAL PRIMARY KEY,
+  property_id INT NOT NULL,
+  media_type ENUM('image', 'video', 'floor_plan', 'document') NOT NULL,
+  media_url VARCHAR(500) NOT NULL,
+  google_drive_id VARCHAR(255), -- Store Google Drive file ID
+  file_name VARCHAR(255),
+  file_size INT, -- in bytes
+  duration_seconds INT, -- for videos
+  thumbnail_url VARCHAR(500), -- for videos
+  upload_order INT, -- for sorting
+  uploaded_by INT,
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id)
+);
+```
+
+### Table 2: property_location (Map & Coordinates)
+```sql
+CREATE TABLE property_location (
+  id SERIAL PRIMARY KEY,
+  property_id INT NOT NULL UNIQUE,
+  latitude DECIMAL(10, 8) NOT NULL,
+  longitude DECIMAL(11, 8) NOT NULL,
+  address_full VARCHAR(500),
+  nearby_locations VARCHAR(500), -- comma-separated: school,hospital,metro,market
+  distance_to_metro INT, -- in meters
+  distance_to_hospital INT,
+  distance_to_school INT,
+  distance_to_market INT,
+  locality_rating DECIMAL(3, 2), -- 1-5 rating
+  locality_description TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE
+);
+```
+
+### Table 3: ai_property_matches (AI Recommendation Cache)
+```sql
+CREATE TABLE ai_property_matches (
+  id SERIAL PRIMARY KEY,
+  client_id INT NOT NULL,
+  property_id INT NOT NULL,
+  match_score DECIMAL(3, 2), -- 0-1.0 score
+  match_reasons VARCHAR(500), -- why matched: budget, location, type
+  confidence_level ENUM('high', 'medium', 'low'),
+  match_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_shown BOOLEAN DEFAULT FALSE,
+  client_response ENUM('interested', 'not_interested', 'maybe', 'not_shown'),
+  response_date TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE
+);
+```
+
+### Table 4: ai_agents (WhatsApp & Automation Bots)
+```sql
+CREATE TABLE ai_agents (
+  id SERIAL PRIMARY KEY,
+  organization_id INT NOT NULL,
+  agent_name VARCHAR(255) NOT NULL,
+  agent_type ENUM('whatsapp_bot', 'follow_up_agent', 'lead_qualifier', 'property_recommender'),
+  whatsapp_phone_id VARCHAR(255), -- WhatsApp Business API phone number
+  whatsapp_api_key VARCHAR(500),
+  status ENUM('active', 'inactive', 'paused'),
+  assigned_to INT, -- team member responsible
+  configuration JSON, -- Custom rules/prompts for this agent
+  prompt_template TEXT, -- AI system prompt
+  follow_up_schedule VARCHAR(100), -- "daily_9am", "every_6h", etc
+  success_rate DECIMAL(3, 2), -- % of successful automations
+  total_interactions INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id),
+  FOREIGN KEY (assigned_to) REFERENCES users(id)
+);
+```
+
+### Table 5: ai_conversations (Chat History)
+```sql
+CREATE TABLE ai_conversations (
+  id SERIAL PRIMARY KEY,
+  client_id INT NOT NULL,
+  ai_agent_id INT NOT NULL,
+  conversation_type ENUM('whatsapp', 'in_app_chat', 'email'),
+  message_from ENUM('client', 'ai_agent', 'human_agent'),
+  message_text TEXT,
+  message_intent ENUM('lead_qualification', 'property_inquiry', 'follow_up', 'booking_request', 'other'),
+  ai_response TEXT,
+  confidence_score DECIMAL(3, 2),
+  requires_human_review BOOLEAN DEFAULT FALSE,
+  reviewed_by INT, -- human agent who reviewed
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (ai_agent_id) REFERENCES ai_agents(id),
+  FOREIGN KEY (reviewed_by) REFERENCES users(id)
+);
+```
+
+### Table 6: team_permissions (Access Control & Feature Toggles)
+```sql
+CREATE TABLE team_permissions (
+  id SERIAL PRIMARY KEY,
+  organization_id INT NOT NULL,
+  user_id INT NOT NULL,
+  role ENUM('owner', 'team_lead', 'agent', 'custom'),
+  
+  -- Feature Toggles (boolean flags for each feature)
+  can_view_leads BOOLEAN DEFAULT TRUE,
+  can_create_leads BOOLEAN DEFAULT TRUE,
+  can_edit_leads BOOLEAN DEFAULT FALSE,
+  can_delete_leads BOOLEAN DEFAULT FALSE,
+  
+  can_view_properties BOOLEAN DEFAULT TRUE,
+  can_create_properties BOOLEAN DEFAULT FALSE,
+  can_edit_properties BOOLEAN DEFAULT FALSE,
+  can_delete_properties BOOLEAN DEFAULT FALSE,
+  
+  can_view_deals BOOLEAN DEFAULT TRUE,
+  can_create_deals BOOLEAN DEFAULT TRUE,
+  can_edit_deals BOOLEAN DEFAULT FALSE,
+  can_close_deals BOOLEAN DEFAULT FALSE,
+  
+  can_view_all_team_data BOOLEAN DEFAULT FALSE,
+  can_assign_tasks BOOLEAN DEFAULT FALSE,
+  can_manage_team BOOLEAN DEFAULT FALSE,
+  can_manage_ai_agents BOOLEAN DEFAULT FALSE,
+  can_access_reports BOOLEAN DEFAULT FALSE,
+  can_manage_permissions BOOLEAN DEFAULT FALSE,
+  
+  can_use_whatsapp_automation BOOLEAN DEFAULT FALSE,
+  can_use_ai_matching BOOLEAN DEFAULT FALSE,
+  can_access_api BOOLEAN DEFAULT FALSE,
+  
+  -- Property Status Toggle Access
+  can_toggle_property_status BOOLEAN DEFAULT FALSE,
+  can_add_media BOOLEAN DEFAULT FALSE,
+  can_edit_location BOOLEAN DEFAULT FALSE,
+  
+  -- Google Drive Integration
+  can_upload_to_drive BOOLEAN DEFAULT FALSE,
+  can_manage_files BOOLEAN DEFAULT FALSE,
+  
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, user_id)
+);
+```
+
+### Table 7: blacklist (Blocked Clients/Leads)
+```sql
+CREATE TABLE blacklist (
+  id SERIAL PRIMARY KEY,
+  organization_id INT NOT NULL,
+  client_id INT,
+  phone_number VARCHAR(20),
+  email VARCHAR(255),
+  blacklist_reason ENUM('spam', 'fraud', 'non_responsive', 'difficult_client', 'competitive', 'other'),
+  reason_description TEXT,
+  blocked_by INT,
+  blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  unblock_date DATE,
+  is_active BOOLEAN DEFAULT TRUE,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id),
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (blocked_by) REFERENCES users(id)
+);
+```
+
+### Table 8: property_status_history (Track Status Changes)
+```sql
+CREATE TABLE property_status_history (
+  id SERIAL PRIMARY KEY,
+  property_id INT NOT NULL,
+  previous_status ENUM('available', 'sold', 'on_hold', 'rented_out', 'listed_elsewhere', 'inactive'),
+  new_status ENUM('available', 'sold', 'on_hold', 'rented_out', 'listed_elsewhere', 'inactive'),
+  reason TEXT,
+  changed_by INT,
+  changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  FOREIGN KEY (changed_by) REFERENCES users(id)
+);
+```
+
+### Table 9: advanced_filters (Saved Search Filters)
+```sql
+CREATE TABLE advanced_filters (
+  id SERIAL PRIMARY KEY,
+  organization_id INT NOT NULL,
+  created_by INT NOT NULL,
+  filter_name VARCHAR(255),
+  filter_type ENUM('property_search', 'client_search', 'deal_search'),
+  
+  -- Property Filters
+  property_type VARCHAR(255), -- residential,commercial,rental,land
+  min_price INT,
+  max_price INT,
+  min_area INT,
+  max_area INT,
+  bedrooms INT,
+  bathrooms INT,
+  furnishing VARCHAR(100),
+  amenities VARCHAR(500),
+  min_age INT,
+  max_age INT,
+  location_cities VARCHAR(500),
+  distance_from_metro INT,
+  facing VARCHAR(50),
+  property_status VARCHAR(100),
+  
+  -- Client Filters
+  client_type VARCHAR(100),
+  min_budget INT,
+  max_budget INT,
+  client_status VARCHAR(100),
+  assigned_agent_id INT,
+  
+  is_public BOOLEAN DEFAULT FALSE, -- Share with team
+  is_saved BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id),
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+```
+
+### Table 10: google_drive_integration (File Sync)
+```sql
+CREATE TABLE google_drive_integration (
+  id SERIAL PRIMARY KEY,
+  organization_id INT NOT NULL,
+  google_drive_folder_id VARCHAR(255) NOT NULL,
+  google_access_token VARCHAR(1000),
+  google_refresh_token VARCHAR(1000),
+  token_expiry TIMESTAMP,
+  total_files_synced INT DEFAULT 0,
+  total_storage_used INT, -- in bytes
+  last_sync_at TIMESTAMP,
+  sync_status ENUM('synced', 'syncing', 'error'),
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id)
+);
+```
+
+---
+
+## Part 2: New API Endpoints
+
+Add these endpoints to your Express backend:
+
+### Property Media Endpoints
+```
+POST /api/properties/:id/media
+  Body: FormData with files or { video_url, google_drive_id }
+  Response: { property_media[] }
+  
+GET /api/properties/:id/media
+  Response: { images[], videos[], floor_plans[] }
+  
+DELETE /api/properties/:id/media/:media_id
+  Response: { message }
+  
+POST /api/properties/:id/media/reorder
+  Body: { media_order: [media_id1, media_id2, ...] }
+  Response: { property_media[] }
+```
+
+### Property Location & Map Endpoints
+```
+POST /api/properties/:id/location
+  Body: { latitude, longitude, address, nearby_locations, distances }
+  Response: { property_location }
+  
+GET /api/properties/:id/location
+  Response: { property_location, nearby_places, amenity_scores }
+  
+GET /api/properties/nearby
+  Query: ?latitude=40.7128&longitude=-74.0060&radius=5000
+  Response: { properties[] }
+  
+GET /api/map/properties
+  Query: ?city=bangalore&property_type=residential&status=available
+  Response: { properties_with_locations[], map_bounds }
+```
+
+### AI Property Matching Endpoints
+```
+POST /api/ai/match-properties
+  Body: { client_id }
+  Response: { matched_properties[], match_details[] }
+  
+GET /api/clients/:id/suggested-properties
+  Response: { suggestions[], match_scores, reasons }
+  
+POST /api/ai/match-property
+  Body: { client_id, property_id }
+  Response: { match_score, match_reasons, confidence }
+  
+PUT /api/ai/matches/:id/feedback
+  Body: { client_response: "interested|not_interested|maybe" }
+  Response: { match }
+  
+POST /api/ai/retrain-model
+  Query: ?org_id=1
+  Response: { message, model_version }
+```
+
+### AI Agent Endpoints (WhatsApp & Automation)
+```
+POST /api/ai-agents
+  Body: { agent_name, agent_type, configuration, prompt_template }
+  Response: { ai_agent }
+  
+GET /api/ai-agents
+  Response: { ai_agents[], active_count, total_interactions }
+  
+PUT /api/ai-agents/:id
+  Body: { status, configuration, prompt_template }
+  Response: { ai_agent }
+  
+POST /api/ai-agents/:id/schedule-followup
+  Body: { client_id, schedule_time, message_template }
+  Response: { scheduled_task }
+  
+POST /api/ai/whatsapp/webhook
+  Body: { message_data from WhatsApp API }
+  Response: { processed }
+  
+GET /api/ai-agents/:id/conversations
+  Response: { conversations[], success_rate, metrics }
+  
+POST /api/ai-agents/:id/send-message
+  Body: { client_id|phone_number, message }
+  Response: { message_sent }
+```
+
+### AI Chat Endpoints (In-app Bot)
+```
+POST /api/ai/chat
+  Body: { client_id, message }
+  Response: { ai_response, intent, properties_suggested }
+  
+GET /api/ai/conversations/:client_id
+  Response: { conversation_history[] }
+  
+POST /api/ai/conversations/:id/rate
+  Body: { rating, feedback }
+  Response: { conversation }
+```
+
+### Advanced Filter Endpoints
+```
+GET /api/filters/properties
+  Query: ?min_price=20L&max_price=50L&city=bangalore&bedrooms=2&furnishing=furnished
+  Response: { properties[], filter_applied, total_count }
+  
+POST /api/filters/save
+  Body: { filter_name, filter_type, criteria }
+  Response: { saved_filter }
+  
+GET /api/filters/saved
+  Response: { saved_filters[] }
+  
+GET /api/filters/suggestions
+  Query: ?search=bangalore
+  Response: { location_suggestions[], price_ranges, popular_filters }
+  
+POST /api/search/instant
+  Query: ?q=2bhk+bangalore&limit=10
+  Response: { results[], suggestions }
+```
+
+### Access Control & Permissions Endpoints
+```
+POST /api/team/:user_id/permissions
+  Body: { role, feature_toggles: { can_create_leads, can_edit_properties, ... } }
+  Response: { team_permission }
+  
+GET /api/team/:user_id/permissions
+  Response: { team_permission, allowed_features[] }
+  
+PUT /api/team/:user_id/permissions
+  Body: { can_view_leads, can_create_properties, ... }
+  Response: { team_permission }
+  
+GET /api/organization/team-access
+  Response: { team_members[], permissions_matrix }
+  
+POST /api/team/:user_id/feature-toggle
+  Body: { feature_name, enabled }
+  Response: { team_permission }
+```
+
+### Blacklist Endpoints
+```
+POST /api/blacklist
+  Body: { client_id|phone|email, reason, description }
+  Response: { blacklist_entry }
+  
+GET /api/blacklist
+  Response: { blacklist_entries[], total_blocked }
+  
+DELETE /api/blacklist/:id
+  Response: { message }
+  
+POST /api/blacklist/:id/unblock
+  Body: { unblock_date }
+  Response: { blacklist_entry }
+  
+GET /api/check-blacklist
+  Query: ?phone=9876543210|email=test@email.com
+  Response: { is_blacklisted, reason }
+```
+
+### Property Status Endpoints
+```
+PUT /api/properties/:id/status
+  Body: { new_status: "available|sold|rented_out|on_hold|inactive", reason }
+  Response: { property, status_history }
+  
+GET /api/properties/:id/status-history
+  Response: { status_history[] }
+  
+GET /api/properties/by-status
+  Query: ?status=rented_out&city=bangalore
+  Response: { properties[] }
+```
+
+### Google Drive Integration Endpoints
+```
+POST /api/drive/authorize
+  Body: { auth_code }
+  Response: { authorized, folder_created }
+  
+GET /api/drive/status
+  Response: { is_connected, total_files, storage_used, last_sync }
+  
+POST /api/drive/upload
+  Body: FormData with file
+  Response: { file_url, google_drive_id }
+  
+POST /api/drive/sync
+  Query: ?org_id=1
+  Response: { synced_files, status }
+  
+GET /api/properties/:id/files
+  Response: { files[], folders[], storage_info }
+```
+
+---
+
+## Part 3: Frontend Components to Add
+
+### 1. Property Media Gallery Component
+```jsx
+<PropertyMediaGallery 
+  property_id={id}
+  media={property.media}
+  onMediaUpload={handleUpload}
+  mediaTypes={['image', 'video', 'floor_plan']}
+/>
+
+Features:
+- Image gallery with lightbox
+- Video player with thumbnail
+- Drag-to-reorder media
+- Upload button (camera, video, files)
+- Delete individual media
+- Show/hide toggle for each media
+```
+
+### 2. Property Location Map Component
+```jsx
+<PropertyLocationMap 
+  property_id={id}
+  latitude={property.latitude}
+  longitude={property.longitude}
+  nearbyPlaces={nearby}
+  onLocationChange={handleLocationUpdate}
+/>
+
+Features:
+- Google Map integration
+- Marker on property location
+- Nearby amenities (school, hospital, metro, market)
+- Distance indicators
+- Edit location (drag marker)
+- Street view button
+- Distance calculation
+```
+
+### 3. AI Property Matcher Component
+```jsx
+<AIPropertyMatcher 
+  client_id={client.id}
+  requirements={client.requirements}
+  onMatchSelect={handleMatchSelected}
+/>
+
+Features:
+- Shows matched properties automatically
+- Match score (0-100%)
+- Match reasons (budget match, location match, type match)
+- Confidence level indicator
+- One-click "Show to Client" button
+- User feedback (interested, not interested, maybe)
+- Learn from feedback
+```
+
+### 4. AI Chat Bot Component
+```jsx
+<AIChatBot 
+  client_id={client.id}
+  onPropertySuggested={handleSuggestion}
+  onLeadQualified={handleQualification}
+/>
+
+Features:
+- Chat interface at bottom-right of screen
+- Natural language understanding
+- Property suggestions in conversation
+- Lead qualification questions
+- Integration with client profile
+- Conversation history
+- Rating/feedback option
+```
+
+### 5. WhatsApp AI Status Component
+```jsx
+<WhatsAppAIStatus 
+  client_id={client.id}
+  last_automated_message={lastMessage}
+  automation_status={status}
+/>
+
+Features:
+- Shows last WhatsApp sent by AI
+- Schedule next follow-up
+- View conversation history
+- Enable/disable automation
+- Custom message templates
+- Delivery & read status
+```
+
+### 6. Advanced Filter Component
+```jsx
+<AdvancedPropertyFilter 
+  onFilterApply={handleFilter}
+  savedFilters={savedFilters}
+/>
+
+Features:
+- Location filter (city, locality, distance to metro)
+- Budget range (min-max price)
+- Property type multi-select
+- Bedrooms/Bathrooms
+- Furnishing type
+- Amenities checklist
+- Age of property
+- Facing direction
+- Save filter with name
+- Load saved filters
+- Clear all filters
+- Quick filters (Under 30L, 2BHK Bangalore, etc)
+```
+
+### 7. Team Access Control Dashboard
+```jsx
+<TeamAccessControl 
+  team_members={team}
+  onPermissionUpdate={handlePermissionChange}
+/>
+
+Features:
+- User list with roles
+- Permission matrix (grid view)
+- Toggle each permission
+- Role presets (Owner, Team Lead, Agent, Custom)
+- Bulk update permissions
+- Feature toggle for each member
+- Access logs/audit trail
+```
+
+### 8. Property Status Toggler Component
+```jsx
+<PropertyStatusToggle 
+  property_id={id}
+  current_status={status}
+  onStatusChange={handleStatusChange}
+/>
+
+Features:
+- Quick toggle buttons: Available, Sold, Rented Out, On Hold, Inactive
+- Status reason/notes
+- History of status changes
+- Timestamp of last change
+- Changed by (who made the change)
+- One-click toggle
+- Confirmation before status change
+```
+
+### 9. Google Drive File Manager Component
+```jsx
+<GoogleDriveFileManager 
+  property_id={property.id}
+  files={property_files}
+  onFileUpload={handleFileUpload}
+/>
+
+Features:
+- Browse property files in Drive
+- Upload files directly
+- File preview
+- Download files
+- Organize by folder
+- Share files with team
+- File size indicator
+- Last modified date
+```
+
+### 10. Blacklist Management Component (Admin)
+```jsx
+<BlacklistManager 
+  organization_id={org_id}
+  blacklist={blacklist}
+/>
+
+Features:
+- Add to blacklist (phone/email/client)
+- Reason selector (spam, fraud, non_responsive, etc)
+- Block duration option
+- View blocked clients
+- Unblock option with date
+- Bulk block
+- Search blacklist
+- Activity logs
+```
+
+---
+
+## Part 4: Services & AI Logic
+
+### AI Property Matching Service
+```javascript
+// Location: /services/aiMatchingService.js
+
+calculatePropertyMatch(client, property) {
+  let score = 0;
+  let reasons = [];
+  
+  // Budget matching (0-30 points)
+  if (client.budget_min && client.budget_max && property.price) {
+    if (property.price >= client.budget_min && property.price <= client.budget_max) {
+      score += 30;
+      reasons.push("Budget match");
+    } else if (property.price < client.budget_min) {
+      score += 15; // Below budget but might be interested
+      reasons.push("Below budget");
+    } else if (property.price <= client.budget_max * 1.1) {
+      score += 20; // Slightly above budget
+      reasons.push("Near budget");
+    }
+  }
+  
+  // Property type matching (0-25 points)
+  if (client.property_type_interested && property.property_type) {
+    if (client.property_type_interested.includes(property.property_type)) {
+      score += 25;
+      reasons.push("Preferred property type");
+    }
+  }
+  
+  // Location matching (0-20 points)
+  if (client.location_preferred && property.area) {
+    if (client.location_preferred.toLowerCase().includes(property.area.toLowerCase())) {
+      score += 20;
+      reasons.push("Preferred location");
+    }
+  }
+  
+  // Bedroom/Bathroom matching (0-15 points)
+  if (client.required_bedrooms && property.bedrooms >= client.required_bedrooms) {
+    score += 15;
+    reasons.push(`${property.bedrooms} bedrooms`);
+  }
+  
+  // Amenities matching (0-10 points)
+  if (client.required_amenities && property.amenities) {
+    const propertyAmenities = property.amenities.split(',');
+    const clientAmenities = client.required_amenities.split(',');
+    const matchedAmenities = clientAmenities.filter(a => propertyAmenities.includes(a)).length;
+    const amenityScore = (matchedAmenities / clientAmenities.length) * 10;
+    score += amenityScore;
+    if (matchedAmenities > 0) reasons.push(`${matchedAmenities} amenities match`);
+  }
+  
+  // Determine confidence level
+  let confidence = score < 30 ? 'low' : score < 70 ? 'medium' : 'high';
+  
+  return {
+    match_score: Math.min(100, score),
+    match_reasons: reasons.join(', '),
+    confidence_level: confidence
+  };
+}
+
+// Get suggestions for client
+async getSuggestionsForClient(client_id) {
+  const client = await Client.findById(client_id);
+  const properties = await Property.find({ status: 'available' });
+  
+  const matches = properties
+    .map(property => ({
+      property,
+      ...this.calculatePropertyMatch(client, property)
+    }))
+    .filter(match => match.match_score >= 50)
+    .sort((a, b) => b.match_score - a.match_score)
+    .slice(0, 10); // Top 10 matches
+  
+  return matches;
+}
+```
+
+### WhatsApp AI Agent Service
+```javascript
+// Location: /services/whatsappAIService.js
+
+async handleIncomingMessage(phone_number, message) {
+  // Find or create client
+  let client = await Client.findOne({ phone: phone_number });
+  if (!client) {
+    client = await Client.create({
+      phone: phone_number,
+      source: 'whatsapp',
+      status: 'inquiry'
+    });
+  }
+  
+  // Check if blacklisted
+  const isBlacklisted = await Blacklist.findOne({ phone_number, is_active: true });
+  if (isBlacklisted) {
+    return await this.sendMessage(phone_number, "Thank you for your interest. We'll contact you soon.");
+  }
+  
+  // Classify message intent
+  const intent = await this.classifyIntent(message);
+  
+  // Route to appropriate handler
+  switch(intent) {
+    case 'lead_qualification':
+      return await this.qualifyLead(client, message);
+    case 'property_inquiry':
+      return await this.suggestProperties(client, message);
+    case 'follow_up':
+      return await this.handleFollowUp(client, message);
+    case 'booking_request':
+      return await this.handleBooking(client, message);
+    default:
+      return await this.escalateToHuman(client, message);
+  }
+}
+
+async suggestProperties(client, requirements) {
+  // Update client requirements from message
+  const extracted = await this.extractRequirements(requirements);
+  await Client.updateOne({ id: client.id }, extracted);
+  
+  // Get AI matches
+  const matches = await aiMatchingService.getSuggestionsForClient(client.id);
+  
+  if (matches.length === 0) {
+    return await this.sendMessage(client.phone, 
+      "We don't have exact matches right now, but we're looking! We'll contact you when we find something.");
+  }
+  
+  // Send top 3 matches
+  const topMatches = matches.slice(0, 3);
+  for (const match of topMatches) {
+    const message = `🏠 ${match.property.address}\n` +
+                    `💰 ₹${match.property.price}\n` +
+                    `📐 ${match.property.bedrooms}BHK | ${match.property.carpet_area} sqft\n` +
+                    `✅ Match: ${match.match_score}% - ${match.match_reasons}`;
+    await this.sendMessage(client.phone, message);
+  }
+  
+  return await this.sendMessage(client.phone, 
+    "Reply with 'interested' for any of these, or 'see more' for options!");
+}
+
+async scheduleAutomaticFollowUp(client_id, days = 1) {
+  const followUpDate = new Date();
+  followUpDate.setDate(followUpDate.getDate() + days);
+  
+  await FollowUp.create({
+    client_id,
+    follow_up_type: 'whatsapp',
+    follow_up_date: followUpDate,
+    notes: 'Automated WhatsApp follow-up from AI agent',
+    status: 'pending'
+  });
+  
+  return { scheduled: true, follow_up_date: followUpDate };
+}
+```
+
+### AI Auto Follow-up Agent
+```javascript
+// Location: /services/aiFollowupAgent.js
+
+async executeScheduledFollowups() {
+  // Find all due follow-ups
+  const dueFollowups = await FollowUp.find({
+    follow_up_date: { $lte: new Date() },
+    status: 'pending'
+  })
+  .populate('client_id')
+  .populate('assigned_to');
+  
+  for (const followup of dueFollowups) {
+    const client = followup.client_id;
+    
+    // Get updated suggestion
+    const matches = await aiMatchingService.getSuggestionsForClient(client.id);
+    
+    if (matches.length > 0) {
+      const message = `Hi ${client.name}! 👋\n\n` +
+                      `We found some properties that match your requirements!\n\n` +
+                      `🏠 ${matches[0].property.address}\n` +
+                      `💰 Price: ₹${matches[0].property.price}\n` +
+                      `✅ Match: ${matches[0].match_score}%\n\n` +
+                      `Would you like to schedule a viewing?`;
+      
+      await whatsappService.sendMessage(client.phone, message);
+      
+      // Schedule next follow-up (3 days later)
+      await this.scheduleNextFollowup(client.id, 3);
+    }
+    
+    // Mark as done
+    await FollowUp.updateOne({ id: followup.id }, { status: 'done', completed_at: new Date() });
+  }
+}
+
+async scheduleNextFollowup(client_id, days = 3) {
+  const nextDate = new Date();
+  nextDate.setDate(nextDate.getDate() + days);
+  
+  await FollowUp.create({
+    client_id,
+    follow_up_type: 'whatsapp',
+    follow_up_date: nextDate,
+    notes: 'Auto-scheduled by AI agent',
+    status: 'pending'
+  });
+}
+```
+
+### Google Drive Integration Service
+```javascript
+// Location: /services/googleDriveService.js
+
+async initializeGoogleDrive(organization_id, auth_code) {
+  // Exchange auth code for tokens
+  const tokens = await googleAuth.exchangeCode(auth_code);
+  
+  // Create organization folder
+  const folderName = `PropertyFlow-${organization_id}`;
+  const folderId = await this.createFolder(folderName, tokens.access_token);
+  
+  // Save to database
+  await GoogleDriveIntegration.create({
+    organization_id,
+    google_drive_folder_id: folderId,
+    google_access_token: tokens.access_token,
+    google_refresh_token: tokens.refresh_token,
+    token_expiry: tokens.expiry_date,
+    sync_status: 'synced'
+  });
+  
+  return { authorized: true, folder_id: folderId };
+}
+
+async uploadFile(organization_id, file, file_type = 'document') {
+  const integration = await GoogleDriveIntegration.findOne({ organization_id });
+  
+  if (!integration) throw new Error('Google Drive not integrated');
+  
+  // Refresh token if expired
+  if (integration.token_expiry < new Date()) {
+    const newTokens = await googleAuth.refreshToken(integration.google_refresh_token);
+    await GoogleDriveIntegration.updateOne({ id: integration.id }, {
+      google_access_token: newTokens.access_token,
+      token_expiry: newTokens.expiry_date
+    });
+    integration.google_access_token = newTokens.access_token;
+  }
+  
+  // Upload file to Google Drive
+  const fileMetadata = {
+    name: file.originalname,
+    parents: [integration.google_drive_folder_id],
+    mimeType: file.mimetype
+  };
+  
+  const fileData = file.buffer;
+  const response = await googleDrive.files.create({
+    auth: googleAuth.getAuthClient(integration.google_access_token),
+    resource: fileMetadata,
+    media: { body: fileData },
+    fields: 'id, webViewLink'
+  });
+  
+  return {
+    google_drive_id: response.data.id,
+    file_url: response.data.webViewLink
+  };
+}
+
+async syncPropertyFiles(property_id) {
+  const property = await Property.findById(property_id);
+  const media = await PropertyMedia.find({ property_id });
+  
+  for (const item of media) {
+    if (!item.google_drive_id) {
+      // Need to upload this media to Google Drive
+      // ... upload logic
+    }
+  }
+  
+  return { synced_files: media.length };
+}
+```
+
+---
+
+## Part 5: AI Prompts for Different Agents
+
+### WhatsApp Lead Qualifier Bot Prompt
+```
+You are PropertyFlow's WhatsApp AI Assistant. Your role is to:
+1. Greet customers warmly and introduce PropertyFlow Real Estate
+2. Ask qualifying questions to understand their needs:
+   - What type of property are they looking for? (Residential, Commercial, Rental, Land)
+   - What's their budget range?
+   - Which location/city do they prefer?
+   - How many bedrooms/bathrooms needed?
+   - When do they need to buy/rent?
+3. Qualify leads: High interest (wants to buy soon) vs Low interest (just exploring)
+4. Collect contact information naturally
+5. Suggest properties based on their requirements
+6. Offer to schedule property viewing
+7. Be friendly, professional, and concise
+8. If customer asks complex questions, offer to connect with human agent
+9. Always maintain conversation history for team review
+
+Remember: Your goal is to qualify leads and suggest relevant properties, not to force a sale.
+```
+
+### Property Recommendation AI Prompt
+```
+You are an expert real estate AI property matcher. Your role is to:
+1. Analyze client requirements deeply
+2. Match properties based on:
+   - Budget alignment (exact match > close match > negotiable)
+   - Location preference and commute convenience
+   - Property type and specifications
+   - Lifestyle and amenities
+3. Provide match explanations (why this property fits)
+4. Suggest alternatives if exact match not available
+5. Learn from client feedback and improve recommendations
+6. Present options in order of best match
+7. Highlight unique features and value propositions
+8. Be transparent about trade-offs (e.g., "₹2L above budget but has premium amenities")
+
+Always prioritize customer satisfaction and transparency.
+```
+
+### Follow-up AI Prompt
+```
+You are PropertyFlow's Automated Follow-up Agent. Your role is to:
+1. Send timely follow-up messages to clients
+2. Update clients on new property listings that match their criteria
+3. Remind clients about properties they've viewed
+4. Offer to schedule viewings
+5. Ask if they have any questions or concerns
+6. Check if their requirements have changed
+7. Maintain professional and friendly tone
+8. Be respectful of their time (not too frequent)
+9. Provide options: "See more properties", "Schedule viewing", "Talk to agent"
+
+Target frequency: Every 3-4 days for active leads, every 7-10 days for warm leads.
+```
+
+---
+
+## Part 6: Frontend Screens to Add
+
+### Advanced Property Search Screen
+```jsx
+// /pages/PropertySearch.jsx
+
+Feature elements:
+- Header: "Find Your Perfect Property"
+- Advanced Filters Section:
+  * Location selector with Google Places autocomplete
+  * Price range slider (₹0 - ₹1Cr)
+  * Property type multi-select buttons
+  * Bedrooms/Bathrooms selector
+  * Furnishing options
+  * Amenities checkboxes (Gym, Pool, Parking, Security, etc)
+  * Age of property range
+  * Property status filter
+  * Facing preference
+  * Quick filters: "Under ₹30L", "2BHK Bangalore", "Premium Properties"
+  * Save filter button
+- Results Section:
+  * Property cards with images
+  * Map view toggle
+  * List view toggle
+  * Sort options (Price: Low to High, Newest, Most Relevant)
+  * Pagination
+- Map View:
+  * Google Map with property markers
+  * Marker clustering
+  * Click marker to see property details
+  * Draw radius around location
+  
+Design: Neo-Brutalist with 2px borders, hard shadows
+```
+
+### Team Management & Access Control Screen
+```jsx
+// /pages/admin/TeamAccessControl.jsx
+
+Components:
+- Team Members List
+  * User profile with avatar
+  * Role badge
+  * Email/Phone
+  * Status toggle (Active/Inactive)
+  * Action menu (Edit, Disable, Remove)
+
+- Permission Matrix Grid
+  * Rows: Team members
+  * Columns: Features/Permissions
+  * Cells: Toggle buttons
+  * Features:
+    - View Leads
+    - Create Leads
+    - Edit Leads
+    - Delete Leads
+    - View Properties
+    - Create Properties
+    - Edit Properties
+    - Delete Properties
+    - Manage Team
+    - Access Reports
+    - Use AI Matching
+    - Use WhatsApp Automation
+    - Manage Google Drive
+    - View All Data
+
+- Role Templates
+  * Owner (All permissions)
+  * Team Lead (Lead management + Team management)
+  * Agent (Create leads, view properties)
+  * Custom (Select specific permissions)
+
+- Audit Log
+  * Who changed what permission
+  * When the change was made
+  * Previous vs New value
+
+Design: Professional grid layout with clear visual toggles
+```
+
+### Property Status Management Screen
+```jsx
+// /pages/admin/PropertyStatusManager.jsx
+
+Components:
+- Property List
+  * Property name/address
+  * Current status badge (Available, Sold, Rented Out, On Hold, Inactive)
+  * Last status change date
+  
+- Status Update Panel (on click)
+  * Current status display
+  * Status options as large buttons:
+    - Available (Green)
+    - Sold (Red)
+    - Rented Out (Blue)
+    - On Hold (Yellow)
+    - Inactive (Gray)
+  * Reason/Notes textarea
+  * Changed by: (automatically shows current user)
+  * Confirmation button
+  
+- Status History Timeline
+  * Previous status
+  * New status
+  * Reason
+  * Changed by
+  * Timestamp
+  * Sort by newest first
+
+Design: Card-based with clear status indicators
+```
+
+### AI Matching Suggestions Screen
+```jsx
+// /pages/AIMatchingSuggestions.jsx
+
+Components:
+- Client Selection
+  * Search by name/phone
+  * Show leads without suggestions assigned
+  
+- Matched Properties Grid
+  * Each property card shows:
+    - Main image (large)
+    - Property address
+    - Price
+    - Match score (0-100%)
+    - Match reasons (in small text)
+    - Confidence level badge
+    - "Show to Client" button
+    - "Not Interested" button
+    - "Mark as Shown" toggle
+
+- Match Score Explanation
+  * Breakdown of score:
+    - Budget match: X%
+    - Location match: X%
+    - Type match: X%
+    - Total: X%
+
+- Client Feedback
+  * Did client like this property?
+  * Star rating (1-5)
+  * Use feedback to improve future matches
+
+Design: Large image-focused cards with clear CTAs
+```
+
+### WhatsApp AI Automation Screen
+```jsx
+// /pages/admin/WhatsAppAutomation.jsx
+
+Components:
+- Active AI Agents List
+  * Agent name
+  * Status toggle (Active/Inactive)
+  * Last activity timestamp
+  * Success rate %
+  * Total interactions count
+  * Action: Edit, View Conversations, Delete
+
+- Agent Configuration Panel
+  * Agent Name
+  * Phone number (WhatsApp Business)
+  * Agent Type selector
+  * Custom prompt template (textarea)
+  * Follow-up schedule (dropdown: Daily, Every 6h, Every 3 days)
+  * Enable/Disable toggle
+  
+- Conversation Monitoring
+  * Recent conversations list
+  * Client name
+  * Last message preview
+  * Timestamp
+  * Agent response status (sent/seen/replied)
+  * Action: Review, Mark for human review
+  
+- Performance Metrics
+  * Total messages sent
+  * Success rate
+  * Human handoff rate
+  * Average response time
+  * Top performing agent
+
+Design: Admin dashboard style with tables and metrics
+```
+
+### Google Drive File Manager Screen
+```jsx
+// /pages/PropertyFiles.jsx
+
+Components:
+- Property Selector
+  * Dropdown to select property
+  
+- File Browser
+  * Folder structure from Google Drive
+  * File list with:
+    - File name
+    - File type icon
+    - File size
+    - Last modified date
+    - Preview thumbnail
+    - Download button
+    - Delete button (if authorized)
+    
+- Upload Section
+  * Drag-drop area
+  * File browser button
+  * Upload progress bar
+  * Recently uploaded files
+  
+- File Categories
+  * Property Photos
+  * Property Videos
+  * Floor Plans
+  * Legal Documents
+  * Quotations/Offers
+  
+- Preview Modal
+  * Image gallery
+  * PDF viewer
+  * Video player
+  * Document preview
+
+Design: File manager style with drag-drop support
+```
+
+### Blacklist Management Screen
+```jsx
+// /pages/admin/Blacklist.jsx
+
+Components:
+- Blacklist Summary
+  * Total blocked: X
+  * Active blocks: X
+  * Expiring soon: X
+  
+- Add to Blacklist Form
+  * Input: Phone number / Email / Client name
+  * Reason dropdown (Spam, Fraud, Non-responsive, Difficult, Competitive)
+  * Description textarea
+  * Block duration selector (Temporary / Permanent)
+  * Add button
+  
+- Blacklist Table
+  * Phone/Email/Client Name
+  * Reason
+  * Blocked By
+  * Blocked Date
+  * Unblock Date (if temporary)
+  * Status (Active/Expired)
+  * Actions: Unblock, View, Edit
+  
+- Bulk Actions
+  * Select multiple entries
+  * Bulk unblock
+  * Bulk extend duration
+
+Design: Admin table with action buttons
+```
+
+---
+
+## Part 7: Installation & Setup Instructions
+
+### Step 1: Update Database
+```sql
+-- Run all the new CREATE TABLE statements above
+-- They will be added to your existing PropertyFlow database
+```
+
+### Step 2: Install New Dependencies
+```bash
+npm install google-auth-library @google-cloud/storage googleapis twilio axios dotenv cors socket.io
+```
+
+### Step 3: Create New Files in Replit
+```bash
+# Backend Services
+mkdir -p backend/services
+touch backend/services/aiMatchingService.js
+touch backend/services/whatsappAIService.js
+touch backend/services/aiFollowupAgent.js
+touch backend/services/googleDriveService.js
+
+# Backend Routes
+touch backend/routes/propertyMedia.js
+touch backend/routes/aiMatching.js
+touch backend/routes/aiAgents.js
+touch backend/routes/filters.js
+touch backend/routes/teamPermissions.js
+touch backend/routes/blacklist.js
+touch backend/routes/googleDrive.js
+
+# Frontend Pages
+mkdir -p frontend/src/pages/advanced
+touch frontend/src/pages/advanced/PropertySearch.jsx
+touch frontend/src/pages/advanced/AIMatching.jsx
+touch frontend/src/pages/admin/TeamAccess.jsx
+touch frontend/src/pages/admin/WhatsAppBot.jsx
+touch frontend/src/pages/admin/PropertyStatus.jsx
+touch frontend/src/pages/admin/Blacklist.jsx
+touch frontend/src/pages/PropertyFiles.jsx
+
+# Frontend Components
+mkdir -p frontend/src/components/advanced
+touch frontend/src/components/advanced/PropertyFilter.jsx
+touch frontend/src/components/advanced/PropertyMatcher.jsx
+touch frontend/src/components/advanced/LocationMap.jsx
+touch frontend/src/components/advanced/ChatBot.jsx
+touch frontend/src/components/admin/AccessControl.jsx
+```
+
+### Step 4: Update Environment Variables
+```bash
+# Add to .env file
+
+# Google Drive Integration
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:5000/api/drive/callback
+
+# WhatsApp Integration
+WHATSAPP_API_KEY=your_whatsapp_business_api_key
+WHATSAPP_PHONE_ID=your_whatsapp_phone_id
+WHATSAPP_WEBHOOK_TOKEN=your_webhook_verify_token
+
+# AI Services (Optional - for advanced ML)
+OPENAI_API_KEY=your_openai_api_key
+COHERE_API_KEY=your_cohere_api_key
+
+# Database
+DATABASE_URL=your_postgresql_url
+
+# JWT
+JWT_SECRET=your_jwt_secret
+```
+
+### Step 5: Run Database Migrations
+```bash
+npm run migrate:up
+npm run seed:advanced-features
+```
+
+### Step 6: Start Backend Services
+```bash
+# Scheduled tasks (WhatsApp follow-ups, etc)
+npm run start:scheduler
+
+# Main server
+npm start
+```
+
+### Step 7: Start Frontend
+```bash
+cd frontend
+npm start
+```
+
+---
+
+## Part 8: Integration Steps
+
+### 1. Google Maps Integration
+```javascript
+// In PropertyLocationMap component
+import { GoogleMap, MarkerF, InfoWindowF } from '@react-google-maps/api';
+
+const mapContainerStyle = { width: '100%', height: '400px' };
+const defaultCenter = { lat: 40.7128, lng: -74.0060 };
+
+<GoogleMap mapContainerStyle={mapContainerStyle} center={defaultCenter} zoom={10}>
+  {properties.map(property => (
+    <MarkerF key={property.id} position={{ lat: property.latitude, lng: property.longitude }} />
+  ))}
+</GoogleMap>
+```
+
+### 2. Google Drive Integration
+```javascript
+// In your backend/services/googleDriveService.js
+const { google } = require('googleapis');
+
+const drive = google.drive('v3');
+
+async function createFolder(folderName, accessToken) {
+  const fileMetadata = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder'
+  };
+  
+  const response = await drive.files.create({
+    auth: accessToken,
+    resource: fileMetadata,
+    fields: 'id'
+  });
+  
+  return response.data.id;
+}
+```
+
+### 3. WhatsApp Business API Integration
+```javascript
+// In your backend/routes/aiAgents.js
+const axios = require('axios');
+
+async function sendWhatsAppMessage(phone_number, message) {
+  try {
+    const response = await axios.post(`https://graph.instagram.com/v18.0/{PHONE_NUMBER_ID}/messages`, {
+      messaging_product: "whatsapp",
+      to: phone_number,
+      type: "text",
+      text: { body: message }
+    }, {
+      headers: { Authorization: `Bearer ${WHATSAPP_API_KEY}` }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('WhatsApp error:', error);
+  }
+}
+```
+
+### 4. Webhook for WhatsApp Messages
+```javascript
+// In your backend/routes/aiAgents.js
+app.post('/webhook/whatsapp', async (req, res) => {
+  const body = req.body;
+  
+  if (body.object && body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
+    const message = body.entry[0].changes[0].value.messages[0];
+    const sender_phone = body.entry[0].changes[0].value.contacts[0].wa_id;
+    
+    // Process incoming message
+    await whatsappAIService.handleIncomingMessage(sender_phone, message.text.body);
+  }
+  
+  res.sendStatus(200);
+});
+```
+
+---
+
+## Part 9: Cron Jobs to Setup
+
+### Follow-up Scheduler
+```javascript
+// In your backend, setup with node-cron
+const cron = require('node-cron');
+
+// Run every day at 9 AM
+cron.schedule('0 9 * * *', async () => {
+  console.log('Running scheduled follow-ups...');
+  await aiFollowupAgent.executeScheduledFollowups();
+});
+
+// Run every 6 hours to check for stalled deals
+cron.schedule('0 */6 * * *', async () => {
+  console.log('Checking for at-risk deals...');
+  await dealService.checkForAtRiskDeals();
+});
+
+// Run WhatsApp message queue every 30 minutes
+cron.schedule('*/30 * * * *', async () => {
+  console.log('Processing WhatsApp message queue...');
+  await whatsappService.processMessageQueue();
+});
+```
+
+---
+
+## Part 10: Testing Checklist
+
+- [ ] Upload property images and videos successfully
+- [ ] Verify images display in gallery with lightbox
+- [ ] Test video playback with thumbnails
+- [ ] Set property location on map
+- [ ] Verify map shows nearby amenities
+- [ ] Test AI matching: Create client → See suggested properties
+- [ ] Verify match scores are calculated correctly
+- [ ] Test WhatsApp AI: Send message from WhatsApp → AI responds
+- [ ] Verify follow-ups are scheduled automatically
+- [ ] Test advanced filters: Filter by location, budget, type
+- [ ] Verify filters work with map view
+- [ ] Test team permissions: Disable feature for agent → Verify they can't access it
+- [ ] Test property status toggle: Change status → Verify history shows change
+- [ ] Test blacklist: Add phone to blacklist → Verify no messages sent to them
+- [ ] Test Google Drive: Upload file → Verify it's in Google Drive
+- [ ] Test AI Chat Bot: Ask property question → Get suggestions
+- [ ] Verify all Neo-Brutalist styling is consistent
+- [ ] Mobile responsiveness: Test on phone screen sizes
+- [ ] Performance: Test loading large property lists
+
+---
+
+## Part 11: Monitoring & Analytics
+
+### Metrics to Track
+```
+AI Matching:
+- Avg match score across all matches
+- % of matches client was interested in
+- Conversion: Matched → Site Visit → Closed
+
+WhatsApp AI:
+- Total messages sent
+- Response rate
+- Lead qualification success rate
+- Human handoff rate
+- Avg response time
+
+Property Filters:
+- Most used filter combinations
+- Filter to view conversion rate
+- Popular property types searched
+
+Permissions:
+- Feature usage by role
+- Which features are most restricted
+- Permission change audit trail
+```
+
+---
+
+## Final Checklist Before Deploy
+
+- [ ] All database tables created
+- [ ] All API endpoints tested
+- [ ] All frontend components working
+- [ ] Google Maps API key configured
+- [ ] Google Drive integration authorized
+- [ ] WhatsApp Business API connected
+- [ ] Environment variables set
+- [ ] Cron jobs scheduled
+- [ ] Error logging configured
+- [ ] CORS configured for production
+- [ ] Database backups automated
+- [ ] Security: JWT validation on all endpoints
+- [ ] Security: SQL injection prevention (parameterized queries)
+- [ ] Security: File upload validation
+- [ ] Performance: Database indexes created
+- [ ] Performance: API response times < 500ms
+- [ ] Tests: Unit tests for critical functions
+- [ ] Tests: API endpoint tests
+- [ ] Tests: AI matching algorithm tests
+- [ ] Documentation: API docs generated
+- [ ] Documentation: Setup guide complete
+- [ ] Deployment: Frontend deployed
+- [ ] Deployment: Backend deployed
+- [ ] Deployment: Database configured
+- [ ] Deployment: Scheduled jobs running
+
+---
+
+**This comprehensive prompt covers everything needed to enhance your existing Replit PropertyFlow CRM with advanced features. Copy and paste this entire prompt, then implement each section step by step.**
+
+**Priority Order for Implementation:**
+1. Database tables (foundational)
+2. Google Maps & Location (core feature)
+3. Advanced Filters (user-facing)
+4. AI Property Matching (value-add)
+5. Google Drive Integration (file storage)
+6. Team Permissions & Access Control (admin)
+7. Property Status Management (operational)
+8. WhatsApp AI Agent (automation)
+9. Blacklist Management (safety)
+10. AI Chat Bot (nice-to-have)
