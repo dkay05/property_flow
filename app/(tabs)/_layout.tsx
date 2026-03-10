@@ -1,18 +1,15 @@
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { NativeTabs, Icon, Label, Badge } from "expo-router/unstable-native-tabs";
+import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useData } from "@/lib/data-context";
 
 function NativeTabLayout() {
-  const { overdueFollowUps } = useData();
-  const badgeCount = overdueFollowUps.length;
-
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -26,6 +23,10 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="properties">
         <Icon sf={{ default: "building.2", selected: "building.2.fill" }} />
         <Label>Properties</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="ai">
+        <Icon sf={{ default: "sparkles", selected: "sparkles.fill" }} />
+        <Label>AI Tools</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="pipeline">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
@@ -64,7 +65,7 @@ function ClassicTabLayout() {
           ) : null,
         tabBarLabelStyle: {
           fontFamily: "DMSans_700Bold",
-          fontSize: 11,
+          fontSize: 10,
         },
       }}
     >
@@ -92,6 +93,15 @@ function ClassicTabLayout() {
           title: "Properties",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="business" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="ai"
+        options={{
+          title: "AI Tools",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="sparkles" size={size} color={color} />
           ),
         }}
       />
