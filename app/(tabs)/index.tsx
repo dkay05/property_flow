@@ -56,12 +56,26 @@ export default function DashboardScreen() {
             <Text style={styles.greeting}>Hey, {user?.name || 'Agent'}</Text>
             <Text style={styles.dateText}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
           </View>
-          <Pressable
-            onPress={() => {}}
-            style={styles.avatarCircle}
-          >
-            <Feather name="user" size={20} color={Colors.black} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/admin');
+              }}
+              style={styles.iconBtn}
+            >
+              <Feather name="settings" size={20} color={Colors.black} />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/advanced-filters');
+              }}
+              style={styles.iconBtn}
+            >
+              <Feather name="filter" size={20} color={Colors.black} />
+            </Pressable>
+          </View>
         </View>
 
         <BrutalistCard style={styles.todayCard}>
@@ -246,7 +260,12 @@ const styles = StyleSheet.create({
     color: Colors.gray,
     marginTop: 2,
   },
-  avatarCircle: {
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  iconBtn: {
     width: 44,
     height: 44,
     borderWidth: 2,
