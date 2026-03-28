@@ -20,6 +20,7 @@ export interface Lead {
   preferredAmenities?: string[];
   city?: string;
   assignedTo?: string;
+  assignedMemberId?: string;
   notes?: string;
   isBlacklisted?: boolean;
   createdAt: string;
@@ -68,6 +69,9 @@ export interface FollowUp {
   time?: string;
   notes: string;
   status: FollowUpStatus;
+  assignedTo?: string;
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  reminderMinutes?: number;
   createdAt: string;
 }
 
@@ -115,7 +119,10 @@ export interface TeamMember {
   email?: string;
   role: 'owner' | 'team_lead' | 'agent' | 'custom';
   isActive: boolean;
-  permissions: TeamPermissions;
+  isBlocked?: boolean;
+  blockedReason?: string;
+  blockedAt?: string;
+  permissions: TeamPermissions | Record<string, boolean>;
   createdAt: string;
 }
 

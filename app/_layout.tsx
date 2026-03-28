@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, router, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -7,6 +7,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { DataProvider } from "@/lib/data-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import {
   useFonts,
   DMSans_400Regular,
@@ -17,6 +18,23 @@ import {
 
 SplashScreen.preventAutoHideAsync();
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (isLoading) return;
+    const inAuthGroup = segments[0] === "login";
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace("/login");
+    } else if (isAuthenticated && inAuthGroup) {
+      router.replace("/(tabs)");
+    }
+  }, [isAuthenticated, isLoading, segments]);
+
+  return <>{children}</>;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -25,39 +43,29 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="lead/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="property/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="admin" options={{ headerShown: false }} />
       <Stack.Screen
         name="add-lead"
-        options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.85],
-          sheetGrabberVisible: true,
-          headerShown: false,
-        }}
+        options={{ presentation: "formSheet", sheetAllowedDetents: [0.85], sheetGrabberVisible: true, headerShown: false }}
       />
       <Stack.Screen
         name="add-property"
-        options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.85],
-          sheetGrabberVisible: true,
-          headerShown: false,
-        }}
+        options={{ presentation: "formSheet", sheetAllowedDetents: [0.85], sheetGrabberVisible: true, headerShown: false }}
       />
       <Stack.Screen
         name="add-followup"
-        options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.7],
-          sheetGrabberVisible: true,
-          headerShown: false,
-        }}
+        options={{ presentation: "formSheet", sheetAllowedDetents: [0.7], sheetGrabberVisible: true, headerShown: false }}
+      />
+      <Stack.Screen
+        name="advanced-filters"
+        options={{ presentation: "formSheet", sheetAllowedDetents: [0.9], sheetGrabberVisible: true, headerShown: false }}
       />
     </Stack>
   );
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_700Bold,
@@ -65,21 +73,25 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
-            <DataProvider>
-              <RootLayoutNav />
-            </DataProvider>
+            <AuthProvider>
+              <DataProvider>
+                <AuthGate>
+                  <RootLayoutNav />
+                </AuthGate>
+              </DataProvider>
+            </AuthProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>

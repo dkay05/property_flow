@@ -1,27 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api, getToken } from './api';
 import {
   Lead, Property, Deal, FollowUp, Activity, UserProfile, LeadStatus,
   PropertyStatusHistory, AIMatch, TeamMember, BlacklistEntry, SavedFilter,
-  PropertyFilterCriteria, ROLE_PERMISSIONS, TeamPermissions,
+  PropertyFilterCriteria, TeamPermissions,
 } from './types';
-import { seedLeads, seedProperties, seedDeals, seedFollowUps, seedActivities, seedTeamMembers, seedBlacklist } from './seed-data';
-import * as Crypto from 'expo-crypto';
-
-const STORAGE_KEYS = {
-  LEADS: '@propertyflow_leads',
-  PROPERTIES: '@propertyflow_properties',
-  DEALS: '@propertyflow_deals',
-  FOLLOWUPS: '@propertyflow_followups',
-  ACTIVITIES: '@propertyflow_activities',
-  USER: '@propertyflow_user',
-  SEEDED: '@propertyflow_seeded_v2',
-  STATUS_HISTORY: '@propertyflow_status_history',
-  AI_MATCHES: '@propertyflow_ai_matches',
-  TEAM_MEMBERS: '@propertyflow_team_members',
-  BLACKLIST: '@propertyflow_blacklist',
-  SAVED_FILTERS: '@propertyflow_saved_filters',
-};
 
 interface DataContextValue {
   leads: Lead[];
@@ -73,6 +56,8 @@ interface DataContextValue {
   updateTeamMember: (id: string, updates: Partial<TeamMember>) => Promise<void>;
   deleteTeamMember: (id: string) => Promise<void>;
   updateTeamPermissions: (memberId: string, permissions: Partial<TeamPermissions>) => Promise<void>;
+  blockTeamMember: (id: string, reason: string) => Promise<void>;
+  unblockTeamMember: (id: string) => Promise<void>;
 
   addToBlacklist: (entry: Omit<BlacklistEntry, 'id' | 'blockedAt'>) => Promise<BlacklistEntry>;
   removeFromBlacklist: (id: string) => Promise<void>;
@@ -82,74 +67,85 @@ interface DataContextValue {
   saveFilter: (filter: Omit<SavedFilter, 'id' | 'createdAt'>) => Promise<SavedFilter>;
   deleteFilter: (id: string) => Promise<void>;
   getFilteredProperties: (criteria: PropertyFilterCriteria) => Property[];
+
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
 
+// ─── Local AI Matching ─────────────────────────────────────────────────────────
 function calculateMatchScore(lead: Lead, property: Property): { score: number; reasons: string[]; confidence: AIMatch['confidenceLevel'] } {
   let score = 0;
   const reasons: string[] = [];
-
   if (lead.budgetMin && lead.budgetMax && property.price) {
-    if (property.price >= lead.budgetMin && property.price <= lead.budgetMax) {
-      score += 30;
-      reasons.push('Budget match');
-    } else if (property.price < lead.budgetMin) {
-      score += 15;
-      reasons.push('Below budget');
-    } else if (property.price <= lead.budgetMax * 1.1) {
-      score += 20;
-      reasons.push('Near budget');
-    }
+    if (property.price >= lead.budgetMin && property.price <= lead.budgetMax) { score += 30; reasons.push('Budget match'); }
+    else if (property.price < lead.budgetMin) { score += 15; reasons.push('Below budget'); }
+    else if (property.price <= lead.budgetMax * 1.1) { score += 20; reasons.push('Near budget'); }
   }
-
-  if (lead.preferredPropertyType && property.propertyType) {
-    if (lead.preferredPropertyType === property.propertyType) {
-      score += 25;
-      reasons.push('Preferred type');
-    }
-  } else if (lead.propertyInterest && property.propertyType) {
-    const interest = lead.propertyInterest.toLowerCase();
-    if (interest.includes(property.propertyType) || interest.includes('bhk') && property.propertyType === 'residential') {
-      score += 20;
-      reasons.push('Property type match');
-    }
-  }
-
-  if (lead.city && property.city) {
-    if (lead.city.toLowerCase() === property.city.toLowerCase()) {
-      score += 20;
-      reasons.push('City match');
-    }
-  }
-
+  if (lead.preferredPropertyType && property.propertyType && lead.preferredPropertyType === property.propertyType) { score += 25; reasons.push('Preferred type'); }
+  if (lead.city && property.city && lead.city.toLowerCase() === property.city.toLowerCase()) { score += 20; reasons.push('City match'); }
   if (lead.preferredBedrooms && property.bedrooms) {
-    if (property.bedrooms >= lead.preferredBedrooms) {
-      score += 15;
-      reasons.push(`${property.bedrooms} BHK`);
-    } else if (property.bedrooms === lead.preferredBedrooms - 1) {
-      score += 8;
-    }
-  } else if (lead.propertyInterest && property.bedrooms) {
-    const match = lead.propertyInterest.match(/(\d+)\s*bhk/i);
-    if (match && parseInt(match[1]) === property.bedrooms) {
-      score += 15;
-      reasons.push(`${property.bedrooms} BHK match`);
-    }
+    if (property.bedrooms >= lead.preferredBedrooms) { score += 15; reasons.push(`${property.bedrooms} BHK`); }
+    else if (property.bedrooms === lead.preferredBedrooms - 1) { score += 8; }
   }
-
-  if (lead.preferredAmenities && lead.preferredAmenities.length > 0 && property.amenities.length > 0) {
-    const matched = lead.preferredAmenities.filter(a =>
-      property.amenities.some(pa => pa.toLowerCase().includes(a.toLowerCase()))
-    );
-    const amenityScore = Math.round((matched.length / lead.preferredAmenities.length) * 10);
-    score += amenityScore;
-    if (matched.length > 0) reasons.push(`${matched.length} amenities match`);
+  const amenities = Array.isArray(lead.preferredAmenities) ? lead.preferredAmenities : [];
+  const propAmenities = Array.isArray(property.amenities) ? property.amenities : [];
+  if (amenities.length > 0 && propAmenities.length > 0) {
+    const matched = amenities.filter(a => propAmenities.some(pa => pa.toLowerCase().includes(a.toLowerCase())));
+    const s = Math.round((matched.length / amenities.length) * 10);
+    score += s;
+    if (matched.length > 0) reasons.push(`${matched.length} amenities`);
   }
-
   const finalScore = Math.min(100, score);
   const confidence: AIMatch['confidenceLevel'] = finalScore >= 70 ? 'high' : finalScore >= 40 ? 'medium' : 'low';
   return { score: finalScore, reasons, confidence };
+}
+
+// ─── Map backend data to frontend types ────────────────────────────────────────
+function mapLead(l: any): Lead {
+  return {
+    id: l.id, name: l.name, phone: l.phone, email: l.email,
+    status: l.status as LeadStatus, source: l.source,
+    budgetMin: l.budgetMin, budgetMax: l.budgetMax,
+    propertyInterest: l.propertyInterest, preferredBedrooms: l.preferredBedrooms,
+    preferredPropertyType: l.preferredPropertyType,
+    preferredAmenities: Array.isArray(l.preferredAmenities) ? l.preferredAmenities : [],
+    city: l.city, assignedTo: l.assignedTo, assignedMemberId: l.assignedMemberId,
+    notes: l.notes, isBlacklisted: l.isBlacklisted || false,
+    createdAt: l.createdAt, updatedAt: l.updatedAt,
+  };
+}
+
+function mapProperty(p: any): Property {
+  return {
+    id: p.id, address: p.address, area: p.area, city: p.city,
+    propertyType: p.propertyType, bedrooms: p.bedrooms, bathrooms: p.bathrooms,
+    carpetArea: p.carpetArea, price: p.price, furnishing: p.furnishing,
+    status: p.status as Property['status'],
+    amenities: Array.isArray(p.amenities) ? p.amenities : [],
+    ownerName: p.ownerName, ownerPhone: p.ownerPhone,
+    images: Array.isArray(p.images) ? p.images : [],
+    latitude: p.latitude, longitude: p.longitude,
+    createdAt: p.createdAt,
+  };
+}
+
+function mapFollowUp(f: any): FollowUp {
+  return {
+    id: f.id, leadId: f.leadId, leadName: f.leadName,
+    type: f.type, date: f.date, time: f.time, notes: f.notes,
+    status: f.status, assignedTo: f.assignedTo, priority: f.priority,
+    reminderMinutes: f.reminderMinutes, createdAt: f.createdAt,
+  };
+}
+
+function mapTeamMember(m: any): TeamMember {
+  return {
+    id: m.id, name: m.name, phone: m.phone, email: m.email,
+    role: m.role, isActive: m.isActive, isBlocked: m.isBlocked || false,
+    blockedReason: m.blockedReason, blockedAt: m.blockedAt,
+    permissions: m.permissions || {}, createdAt: m.createdAt,
+  };
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -170,284 +166,209 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const loadData = async () => {
     try {
-      const seeded = await AsyncStorage.getItem(STORAGE_KEYS.SEEDED);
-      if (!seeded) {
-        await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(seedLeads)),
-          AsyncStorage.setItem(STORAGE_KEYS.PROPERTIES, JSON.stringify(seedProperties)),
-          AsyncStorage.setItem(STORAGE_KEYS.DEALS, JSON.stringify(seedDeals)),
-          AsyncStorage.setItem(STORAGE_KEYS.FOLLOWUPS, JSON.stringify(seedFollowUps)),
-          AsyncStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(seedActivities)),
-          AsyncStorage.setItem(STORAGE_KEYS.TEAM_MEMBERS, JSON.stringify(seedTeamMembers)),
-          AsyncStorage.setItem(STORAGE_KEYS.BLACKLIST, JSON.stringify(seedBlacklist)),
-          AsyncStorage.setItem(STORAGE_KEYS.STATUS_HISTORY, JSON.stringify([])),
-          AsyncStorage.setItem(STORAGE_KEYS.AI_MATCHES, JSON.stringify([])),
-          AsyncStorage.setItem(STORAGE_KEYS.SAVED_FILTERS, JSON.stringify([])),
-          AsyncStorage.setItem(STORAGE_KEYS.SEEDED, 'true'),
-        ]);
-        setLeads(seedLeads);
-        setProperties(seedProperties);
-        setDeals(seedDeals);
-        setFollowUps(seedFollowUps);
-        setActivities(seedActivities);
-        setTeamMembers(seedTeamMembers);
-        setBlacklist(seedBlacklist);
-      } else {
-        const [l, p, d, f, a, sh, am, tm, bl, sf] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEYS.LEADS),
-          AsyncStorage.getItem(STORAGE_KEYS.PROPERTIES),
-          AsyncStorage.getItem(STORAGE_KEYS.DEALS),
-          AsyncStorage.getItem(STORAGE_KEYS.FOLLOWUPS),
-          AsyncStorage.getItem(STORAGE_KEYS.ACTIVITIES),
-          AsyncStorage.getItem(STORAGE_KEYS.STATUS_HISTORY),
-          AsyncStorage.getItem(STORAGE_KEYS.AI_MATCHES),
-          AsyncStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS),
-          AsyncStorage.getItem(STORAGE_KEYS.BLACKLIST),
-          AsyncStorage.getItem(STORAGE_KEYS.SAVED_FILTERS),
-        ]);
-        setLeads(l ? JSON.parse(l) : []);
-        setProperties(p ? JSON.parse(p) : []);
-        setDeals(d ? JSON.parse(d) : []);
-        setFollowUps(f ? JSON.parse(f) : []);
-        setActivities(a ? JSON.parse(a) : []);
-        setStatusHistory(sh ? JSON.parse(sh) : []);
-        setAiMatches(am ? JSON.parse(am) : []);
-        setTeamMembers(tm ? JSON.parse(tm) : seedTeamMembers);
-        setBlacklist(bl ? JSON.parse(bl) : seedBlacklist);
-        setSavedFilters(sf ? JSON.parse(sf) : []);
-      }
-
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-      if (userData) setUser(JSON.parse(userData));
+      const token = await getToken();
+      if (!token) { setIsLoading(false); return; }
+      await refreshData();
     } catch (e) {
-      console.error('Error loading data:', e);
+      console.error('DataProvider load error:', e);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const persist = async (key: string, data: unknown) => {
-    await AsyncStorage.setItem(key, JSON.stringify(data));
-  };
+  const refreshData = useCallback(async () => {
+    try {
+      const [l, p, d, f, tm, bl, sf] = await Promise.all([
+        api<any[]>("GET", "/api/leads"),
+        api<any[]>("GET", "/api/properties"),
+        api<any[]>("GET", "/api/deals"),
+        api<any[]>("GET", "/api/followups"),
+        api<any[]>("GET", "/api/team"),
+        api<any[]>("GET", "/api/blacklist"),
+        api<any[]>("GET", "/api/filters"),
+      ]);
+      setLeads(l.map(mapLead));
+      setProperties(p.map(mapProperty));
+      setDeals(d);
+      setFollowUps(f.map(mapFollowUp));
+      setTeamMembers(tm.map(mapTeamMember));
+      setBlacklist(bl.map((b: any) => ({ id: b.id, clientName: b.clientName, phoneNumber: b.phoneNumber, email: b.email, leadId: b.leadId, reason: b.reason, reasonDescription: b.reasonDescription, blockedBy: b.blockedBy, blockedAt: b.blockedAt, isActive: b.isActive })));
+      setSavedFilters(sf.map((f: any) => ({ id: f.id, name: f.name, filterType: f.filterType, criteria: f.criteria, createdAt: f.createdAt })));
+    } catch (e) {
+      console.error('refreshData error:', e);
+    }
+  }, []);
 
   const login = useCallback(async (name: string, phone: string) => {
     const profile: UserProfile = { name, phone, role: 'agent', isLoggedIn: true };
     setUser(profile);
-    await persist(STORAGE_KEYS.USER, profile);
   }, []);
 
-  const logout = useCallback(async () => {
-    setUser(null);
-    await AsyncStorage.removeItem(STORAGE_KEYS.USER);
-  }, []);
+  const logout = useCallback(async () => { setUser(null); }, []);
 
   const addLead = useCallback(async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Promise<Lead> => {
-    const now = new Date().toISOString();
-    const newLead: Lead = { ...lead, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
-    const updated = [newLead, ...leads];
-    setLeads(updated);
-    await persist(STORAGE_KEYS.LEADS, updated);
-    const act: Activity = {
-      id: Crypto.randomUUID(), leadId: newLead.id, type: 'created',
-      description: `Lead created - ${lead.source} inquiry for ${lead.propertyInterest || 'property'}`,
-      timestamp: now, agent: user?.name,
-    };
-    const updatedActs = [act, ...activities];
-    setActivities(updatedActs);
-    await persist(STORAGE_KEYS.ACTIVITIES, updatedActs);
+    const result = await api<any>("POST", "/api/leads", lead);
+    const newLead = mapLead(result);
+    setLeads(prev => [newLead, ...prev]);
     return newLead;
-  }, [leads, activities, user]);
+  }, []);
 
   const updateLead = useCallback(async (id: string, updates: Partial<Lead>) => {
-    const updated = leads.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l);
-    setLeads(updated);
-    await persist(STORAGE_KEYS.LEADS, updated);
-  }, [leads]);
+    const result = await api<any>("PUT", `/api/leads/${id}`, updates);
+    setLeads(prev => prev.map(l => l.id === id ? mapLead(result) : l));
+  }, []);
 
   const deleteLead = useCallback(async (id: string) => {
-    const updated = leads.filter(l => l.id !== id);
-    setLeads(updated);
-    await persist(STORAGE_KEYS.LEADS, updated);
-  }, [leads]);
+    await api("DELETE", `/api/leads/${id}`);
+    setLeads(prev => prev.filter(l => l.id !== id));
+  }, []);
 
   const addProperty = useCallback(async (property: Omit<Property, 'id' | 'createdAt'>): Promise<Property> => {
-    const newProp: Property = { ...property, id: Crypto.randomUUID(), createdAt: new Date().toISOString() };
-    const updated = [newProp, ...properties];
-    setProperties(updated);
-    await persist(STORAGE_KEYS.PROPERTIES, updated);
+    const result = await api<any>("POST", "/api/properties", property);
+    const newProp = mapProperty(result);
+    setProperties(prev => [newProp, ...prev]);
     return newProp;
-  }, [properties]);
+  }, []);
 
   const updateProperty = useCallback(async (id: string, updates: Partial<Property>) => {
-    const updated = properties.map(p => p.id === id ? { ...p, ...updates } : p);
-    setProperties(updated);
-    await persist(STORAGE_KEYS.PROPERTIES, updated);
-  }, [properties]);
+    const result = await api<any>("PUT", `/api/properties/${id}`, updates);
+    setProperties(prev => prev.map(p => p.id === id ? mapProperty(result) : p));
+  }, []);
 
   const addFollowUp = useCallback(async (followUp: Omit<FollowUp, 'id' | 'createdAt'>): Promise<FollowUp> => {
-    const newFu: FollowUp = { ...followUp, id: Crypto.randomUUID(), createdAt: new Date().toISOString() };
-    const updated = [newFu, ...followUps];
-    setFollowUps(updated);
-    await persist(STORAGE_KEYS.FOLLOWUPS, updated);
-    return newFu;
-  }, [followUps]);
+    const result = await api<any>("POST", "/api/followups", followUp);
+    const newFU = mapFollowUp(result);
+    setFollowUps(prev => [newFU, ...prev]);
+    return newFU;
+  }, []);
 
   const updateFollowUp = useCallback(async (id: string, updates: Partial<FollowUp>) => {
-    const updated = followUps.map(f => f.id === id ? { ...f, ...updates } : f);
-    setFollowUps(updated);
-    await persist(STORAGE_KEYS.FOLLOWUPS, updated);
-  }, [followUps]);
+    const result = await api<any>("PUT", `/api/followups/${id}`, updates);
+    setFollowUps(prev => prev.map(f => f.id === id ? mapFollowUp(result) : f));
+  }, []);
 
   const addActivity = useCallback(async (activity: Omit<Activity, 'id'>) => {
-    const newAct: Activity = { ...activity, id: Crypto.randomUUID() };
-    const updated = [newAct, ...activities];
-    setActivities(updated);
-    await persist(STORAGE_KEYS.ACTIVITIES, updated);
-  }, [activities]);
+    const result = await api<any>("POST", `/api/leads/${activity.leadId}/activities`, activity);
+    setActivities(prev => [{ ...result, timestamp: result.timestamp || new Date().toISOString() }, ...prev]);
+  }, []);
 
   const changePropertyStatus = useCallback(async (propertyId: string, newStatus: Property['status'], reason?: string) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property) return;
-    const history: PropertyStatusHistory = {
-      id: Crypto.randomUUID(), propertyId,
-      previousStatus: property.status, newStatus,
-      reason, changedBy: user?.name || 'Agent',
-      changedAt: new Date().toISOString(),
-    };
-    const updatedHistory = [history, ...statusHistory];
-    setStatusHistory(updatedHistory);
-    await persist(STORAGE_KEYS.STATUS_HISTORY, updatedHistory);
-    await updateProperty(propertyId, { status: newStatus });
-  }, [properties, statusHistory, user, updateProperty]);
+    const result = await api<{ property: any; history: any }>("PUT", `/api/properties/${propertyId}/status`, { newStatus, reason });
+    setProperties(prev => prev.map(p => p.id === propertyId ? mapProperty(result.property) : p));
+    if (result.history) {
+      const h: PropertyStatusHistory = { id: result.history.id, propertyId, previousStatus: result.history.previousStatus, newStatus, reason: reason || '', changedBy: result.history.changedBy, changedAt: result.history.changedAt };
+      setStatusHistory(prev => [h, ...prev]);
+    }
+  }, []);
 
-  const getStatusHistoryForProperty = useCallback((propertyId: string) =>
-    statusHistory.filter(h => h.propertyId === propertyId).sort((a, b) => b.changedAt.localeCompare(a.changedAt)),
-    [statusHistory]);
+  const getStatusHistoryForProperty = useCallback((propertyId: string) => {
+    return statusHistory.filter(h => h.propertyId === propertyId);
+  }, [statusHistory]);
 
-  const getAIMatchesForLead = useCallback((leadId: string) =>
-    aiMatches.filter(m => m.leadId === leadId).sort((a, b) => b.matchScore - a.matchScore),
-    [aiMatches]);
+  const getAIMatchesForLead = useCallback((leadId: string) => {
+    return aiMatches.filter(m => m.leadId === leadId);
+  }, [aiMatches]);
 
   const calculateAndSaveMatches = useCallback(async (leadId: string): Promise<AIMatch[]> => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return [];
-
-    const availableProperties = properties.filter(p => p.status === 'available' || p.status === 'under_offer');
-    const existingMatchIds = new Set(aiMatches.filter(m => m.leadId === leadId).map(m => m.propertyId));
-
-    const newMatches: AIMatch[] = [];
-    for (const property of availableProperties) {
-      if (existingMatchIds.has(property.id)) continue;
+    const available = properties.filter(p => p.status === 'available');
+    const matches: AIMatch[] = available.map(property => {
       const { score, reasons, confidence } = calculateMatchScore(lead, property);
-      if (score >= 30) {
-        newMatches.push({
-          id: Crypto.randomUUID(), leadId, propertyId: property.id,
-          matchScore: score, matchReasons: reasons, confidenceLevel: confidence,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    }
-
-    const allMatches = [...aiMatches, ...newMatches];
-    setAiMatches(allMatches);
-    await persist(STORAGE_KEYS.AI_MATCHES, allMatches);
-
-    return allMatches.filter(m => m.leadId === leadId).sort((a, b) => b.matchScore - a.matchScore);
-  }, [leads, properties, aiMatches]);
+      return { id: `${leadId}-${property.id}`, leadId, propertyId: property.id, matchScore: score, matchReasons: reasons, confidenceLevel: confidence, createdAt: new Date().toISOString() };
+    }).filter(m => m.matchScore > 0).sort((a, b) => b.matchScore - a.matchScore).slice(0, 5);
+    setAiMatches(prev => {
+      const filtered = prev.filter(m => m.leadId !== leadId);
+      return [...matches, ...filtered];
+    });
+    return matches;
+  }, [leads, properties]);
 
   const updateAIMatchResponse = useCallback(async (matchId: string, response: AIMatch['clientResponse']) => {
-    const updated = aiMatches.map(m => m.id === matchId ? { ...m, clientResponse: response } : m);
-    setAiMatches(updated);
-    await persist(STORAGE_KEYS.AI_MATCHES, updated);
-  }, [aiMatches]);
+    setAiMatches(prev => prev.map(m => m.id === matchId ? { ...m, clientResponse: response } : m));
+  }, []);
 
   const addTeamMember = useCallback(async (member: Omit<TeamMember, 'id' | 'createdAt'>): Promise<TeamMember> => {
-    const newMember: TeamMember = { ...member, id: Crypto.randomUUID(), createdAt: new Date().toISOString() };
-    const updated = [...teamMembers, newMember];
-    setTeamMembers(updated);
-    await persist(STORAGE_KEYS.TEAM_MEMBERS, updated);
+    const result = await api<any>("POST", "/api/team", { ...member, password: "agent123" });
+    const newMember = mapTeamMember(result);
+    setTeamMembers(prev => [...prev, newMember]);
     return newMember;
-  }, [teamMembers]);
+  }, []);
 
   const updateTeamMember = useCallback(async (id: string, updates: Partial<TeamMember>) => {
-    const updated = teamMembers.map(m => m.id === id ? { ...m, ...updates } : m);
-    setTeamMembers(updated);
-    await persist(STORAGE_KEYS.TEAM_MEMBERS, updated);
-  }, [teamMembers]);
+    const result = await api<any>("PUT", `/api/team/${id}`, updates);
+    setTeamMembers(prev => prev.map(m => m.id === id ? mapTeamMember(result) : m));
+  }, []);
 
   const deleteTeamMember = useCallback(async (id: string) => {
-    const updated = teamMembers.filter(m => m.id !== id);
-    setTeamMembers(updated);
-    await persist(STORAGE_KEYS.TEAM_MEMBERS, updated);
-  }, [teamMembers]);
+    await api("DELETE", `/api/team/${id}`);
+    setTeamMembers(prev => prev.filter(m => m.id !== id));
+  }, []);
 
   const updateTeamPermissions = useCallback(async (memberId: string, permissions: Partial<TeamPermissions>) => {
-    const updated = teamMembers.map(m => m.id === memberId
-      ? { ...m, permissions: { ...m.permissions, ...permissions } }
-      : m);
-    setTeamMembers(updated);
-    await persist(STORAGE_KEYS.TEAM_MEMBERS, updated);
+    const member = teamMembers.find(m => m.id === memberId);
+    const merged = { ...((member?.permissions as any) || {}), ...permissions };
+    const result = await api<any>("PUT", `/api/team/${memberId}/permissions`, { permissions: merged });
+    setTeamMembers(prev => prev.map(m => m.id === memberId ? mapTeamMember(result) : m));
   }, [teamMembers]);
 
+  const blockTeamMember = useCallback(async (id: string, reason: string) => {
+    const result = await api<any>("POST", `/api/team/${id}/block`, { reason });
+    setTeamMembers(prev => prev.map(m => m.id === id ? mapTeamMember(result) : m));
+  }, []);
+
+  const unblockTeamMember = useCallback(async (id: string) => {
+    const result = await api<any>("POST", `/api/team/${id}/unblock`);
+    setTeamMembers(prev => prev.map(m => m.id === id ? mapTeamMember(result) : m));
+  }, []);
+
   const addToBlacklist = useCallback(async (entry: Omit<BlacklistEntry, 'id' | 'blockedAt'>): Promise<BlacklistEntry> => {
-    const newEntry: BlacklistEntry = { ...entry, id: Crypto.randomUUID(), blockedAt: new Date().toISOString() };
-    const updated = [newEntry, ...blacklist];
-    setBlacklist(updated);
-    await persist(STORAGE_KEYS.BLACKLIST, updated);
-    if (entry.leadId) {
-      await updateLead(entry.leadId, { isBlacklisted: true });
-    }
+    const result = await api<any>("POST", "/api/blacklist", { clientName: entry.clientName, phoneNumber: entry.phoneNumber, email: entry.email, leadId: entry.leadId, reason: entry.reason, reasonDescription: entry.reasonDescription });
+    const newEntry: BlacklistEntry = { id: result.id, clientName: result.clientName, phoneNumber: result.phoneNumber, email: result.email, leadId: result.leadId, reason: result.reason, reasonDescription: result.reasonDescription, blockedBy: result.blockedBy, blockedAt: result.blockedAt, isActive: result.isActive };
+    setBlacklist(prev => [newEntry, ...prev]);
+    if (entry.leadId) setLeads(prev => prev.map(l => l.id === entry.leadId ? { ...l, isBlacklisted: true } : l));
     return newEntry;
-  }, [blacklist, updateLead]);
+  }, []);
 
   const removeFromBlacklist = useCallback(async (id: string) => {
     const entry = blacklist.find(b => b.id === id);
-    const updated = blacklist.map(b => b.id === id ? { ...b, isActive: false } : b);
-    setBlacklist(updated);
-    await persist(STORAGE_KEYS.BLACKLIST, updated);
-    if (entry?.leadId) {
-      await updateLead(entry.leadId, { isBlacklisted: false });
-    }
-  }, [blacklist, updateLead]);
+    await api("POST", `/api/blacklist/${id}/unblock`);
+    setBlacklist(prev => prev.filter(b => b.id !== id));
+    if (entry?.leadId) setLeads(prev => prev.map(l => l.id === entry.leadId ? { ...l, isBlacklisted: false } : l));
+  }, [blacklist]);
 
-  const isPhoneBlacklisted = useCallback((phone: string) =>
-    blacklist.some(b => b.isActive && b.phoneNumber === phone), [blacklist]);
+  const isPhoneBlacklisted = useCallback((phone: string) => {
+    return blacklist.some(b => b.isActive && b.phoneNumber === phone);
+  }, [blacklist]);
 
-  const isEmailBlacklisted = useCallback((email: string) =>
-    blacklist.some(b => b.isActive && b.email === email), [blacklist]);
+  const isEmailBlacklisted = useCallback((email: string) => {
+    return blacklist.some(b => b.isActive && b.email === email);
+  }, [blacklist]);
 
   const saveFilter = useCallback(async (filter: Omit<SavedFilter, 'id' | 'createdAt'>): Promise<SavedFilter> => {
-    const newFilter: SavedFilter = { ...filter, id: Crypto.randomUUID(), createdAt: new Date().toISOString() };
-    const updated = [newFilter, ...savedFilters];
-    setSavedFilters(updated);
-    await persist(STORAGE_KEYS.SAVED_FILTERS, updated);
+    const result = await api<any>("POST", "/api/filters", filter);
+    const newFilter: SavedFilter = { id: result.id, name: result.name, filterType: result.filterType, criteria: result.criteria, createdAt: result.createdAt };
+    setSavedFilters(prev => [newFilter, ...prev]);
     return newFilter;
-  }, [savedFilters]);
+  }, []);
 
   const deleteFilter = useCallback(async (id: string) => {
-    const updated = savedFilters.filter(f => f.id !== id);
-    setSavedFilters(updated);
-    await persist(STORAGE_KEYS.SAVED_FILTERS, updated);
-  }, [savedFilters]);
+    await api("DELETE", `/api/filters/${id}`);
+    setSavedFilters(prev => prev.filter(f => f.id !== id));
+  }, []);
 
   const getFilteredProperties = useCallback((criteria: PropertyFilterCriteria): Property[] => {
     return properties.filter(p => {
-      if (criteria.propertyTypes && criteria.propertyTypes.length > 0) {
-        if (!criteria.propertyTypes.includes(p.propertyType)) return false;
-      }
-      if (criteria.minPrice !== undefined && p.price < criteria.minPrice) return false;
-      if (criteria.maxPrice !== undefined && p.price > criteria.maxPrice) return false;
-      if (criteria.minArea !== undefined && p.carpetArea !== undefined && p.carpetArea < criteria.minArea) return false;
-      if (criteria.maxArea !== undefined && p.carpetArea !== undefined && p.carpetArea > criteria.maxArea) return false;
-      if (criteria.bedrooms !== undefined && p.bedrooms !== criteria.bedrooms) return false;
+      if (criteria.propertyType && p.propertyType !== criteria.propertyType) return false;
+      if (criteria.minPrice && p.price < criteria.minPrice) return false;
+      if (criteria.maxPrice && p.price > criteria.maxPrice) return false;
+      if (criteria.bedrooms && p.bedrooms !== criteria.bedrooms) return false;
       if (criteria.furnishing && p.furnishing !== criteria.furnishing) return false;
       if (criteria.city && !p.city.toLowerCase().includes(criteria.city.toLowerCase())) return false;
       if (criteria.status && p.status !== criteria.status) return false;
-      if (criteria.amenities && criteria.amenities.length > 0) {
-        const hasAllAmenities = criteria.amenities.every(a =>
-          p.amenities.some(pa => pa.toLowerCase().includes(a.toLowerCase()))
-        );
-        if (!hasAllAmenities) return false;
+      if (criteria.amenities?.length) {
+        const hasAll = criteria.amenities.every(a => p.amenities.some(pa => pa.toLowerCase().includes(a.toLowerCase())));
+        if (!hasAll) return false;
       }
       return true;
     });
@@ -455,57 +376,50 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const getLeadById = useCallback((id: string) => leads.find(l => l.id === id), [leads]);
   const getPropertyById = useCallback((id: string) => properties.find(p => p.id === id), [properties]);
-  const getActivitiesForLead = useCallback((leadId: string) =>
-    activities.filter(a => a.leadId === leadId).sort((a, b) => b.timestamp.localeCompare(a.timestamp)), [activities]);
+  const getActivitiesForLead = useCallback((leadId: string) => activities.filter(a => a.leadId === leadId), [activities]);
   const getFollowUpsForLead = useCallback((leadId: string) => followUps.filter(f => f.leadId === leadId), [followUps]);
   const getDealsForLead = useCallback((leadId: string) => deals.filter(d => d.leadId === leadId), [deals]);
 
   const today = new Date().toISOString().split('T')[0];
-  const todayFollowUps = useMemo(() =>
-    followUps.filter(f => f.date === today && f.status === 'pending'), [followUps, today]);
-  const overdueFollowUps = useMemo(() =>
-    followUps.filter(f => f.date < today && (f.status === 'pending' || f.status === 'overdue')), [followUps, today]);
-
+  const todayFollowUps = useMemo(() => followUps.filter(f => f.date === today && f.status !== 'done'), [followUps, today]);
+  const overdueFollowUps = useMemo(() => followUps.filter(f => f.date < today && f.status === 'pending'), [followUps, today]);
   const pipelineCounts = useMemo(() => {
-    const counts: Record<LeadStatus, number> = { inquiry: 0, site_visit: 0, negotiation: 0, offer: 0, closed: 0, dead: 0 };
-    leads.forEach(l => { counts[l.status]++; });
+    const counts: Record<LeadStatus, number> = { inquiry: 0, site_visit: 0, negotiation: 0, deal_done: 0, lost: 0 };
+    leads.forEach(l => { if (l.status in counts) counts[l.status as LeadStatus]++; });
     return counts;
   }, [leads]);
 
-  const value = useMemo(() => ({
-    leads, properties, deals, followUps, activities, user, isLoading,
-    statusHistory, aiMatches, teamMembers, blacklist, savedFilters,
-    login, logout,
-    addLead, updateLead, deleteLead,
-    addProperty, updateProperty,
-    addFollowUp, updateFollowUp,
-    addActivity,
-    getLeadById, getPropertyById, getActivitiesForLead, getFollowUpsForLead, getDealsForLead,
-    todayFollowUps, overdueFollowUps, pipelineCounts,
-    changePropertyStatus, getStatusHistoryForProperty,
-    getAIMatchesForLead, calculateAndSaveMatches, updateAIMatchResponse,
-    addTeamMember, updateTeamMember, deleteTeamMember, updateTeamPermissions,
-    addToBlacklist, removeFromBlacklist, isPhoneBlacklisted, isEmailBlacklisted,
-    saveFilter, deleteFilter, getFilteredProperties,
-  }), [
+  const value = useMemo<DataContextValue>(() => ({
     leads, properties, deals, followUps, activities, user, isLoading,
     statusHistory, aiMatches, teamMembers, blacklist, savedFilters,
     login, logout, addLead, updateLead, deleteLead, addProperty, updateProperty,
-    addFollowUp, updateFollowUp, addActivity,
+    addFollowUp, updateFollowUp, addActivity, changePropertyStatus,
     getLeadById, getPropertyById, getActivitiesForLead, getFollowUpsForLead, getDealsForLead,
+    getStatusHistoryForProperty, getAIMatchesForLead, calculateAndSaveMatches, updateAIMatchResponse,
     todayFollowUps, overdueFollowUps, pipelineCounts,
-    changePropertyStatus, getStatusHistoryForProperty,
-    getAIMatchesForLead, calculateAndSaveMatches, updateAIMatchResponse,
     addTeamMember, updateTeamMember, deleteTeamMember, updateTeamPermissions,
+    blockTeamMember, unblockTeamMember,
     addToBlacklist, removeFromBlacklist, isPhoneBlacklisted, isEmailBlacklisted,
-    saveFilter, deleteFilter, getFilteredProperties,
+    saveFilter, deleteFilter, getFilteredProperties, refreshData,
+  }), [
+    leads, properties, deals, followUps, activities, user, isLoading,
+    statusHistory, aiMatches, teamMembers, blacklist, savedFilters,
+    todayFollowUps, overdueFollowUps, pipelineCounts,
+    login, logout, addLead, updateLead, deleteLead, addProperty, updateProperty,
+    addFollowUp, updateFollowUp, addActivity, changePropertyStatus,
+    getLeadById, getPropertyById, getActivitiesForLead, getFollowUpsForLead, getDealsForLead,
+    getStatusHistoryForProperty, getAIMatchesForLead, calculateAndSaveMatches, updateAIMatchResponse,
+    addTeamMember, updateTeamMember, deleteTeamMember, updateTeamPermissions,
+    blockTeamMember, unblockTeamMember,
+    addToBlacklist, removeFromBlacklist, isPhoneBlacklisted, isEmailBlacklisted,
+    saveFilter, deleteFilter, getFilteredProperties, refreshData,
   ]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useData() {
-  const context = useContext(DataContext);
-  if (!context) throw new Error('useData must be used within DataProvider');
-  return context;
+  const ctx = useContext(DataContext);
+  if (!ctx) throw new Error('useData must be used inside DataProvider');
+  return ctx;
 }
