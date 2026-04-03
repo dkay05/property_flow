@@ -60,8 +60,10 @@ export function statusLabel(status: string): string {
     site_visit: 'Site Visit',
     negotiation: 'Negotiation',
     offer: 'Offer',
-    closed: 'Closed',
-    dead: 'Dead',
+    deal_done: 'Deal Done',
+    lost: 'Lost',
+    closed: 'Deal Done',
+    dead: 'Lost',
   };
   return map[status] || status;
 }

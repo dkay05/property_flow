@@ -1,4 +1,4 @@
-export type LeadStatus = 'inquiry' | 'site_visit' | 'negotiation' | 'offer' | 'closed' | 'dead';
+export type LeadStatus = 'inquiry' | 'site_visit' | 'negotiation' | 'offer' | 'deal_done' | 'lost';
 export type LeadSource = 'walk_in' | 'referral' | 'call' | 'website' | 'social_media';
 export type PropertyType = 'residential' | 'commercial' | 'rental' | 'land';
 export type PropertyStatus = 'available' | 'sold' | 'rented_out' | 'on_hold' | 'inactive' | 'under_offer';

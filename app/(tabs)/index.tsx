@@ -6,6 +6,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useData } from '@/lib/data-context';
+import { useAuth } from '@/lib/auth-context';
 import { BrutalistCard, BrutalistButton, StatusBadge, SectionHeader, EmptyState } from '@/components/ui';
 import { formatTime, formatBudget, formatDate, daysAgo, followUpTypeLabel } from '@/lib/format';
 
@@ -22,7 +23,8 @@ function FollowUpIcon({ type }: { type: string }) {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { leads, todayFollowUps, overdueFollowUps, pipelineCounts, updateFollowUp, user } = useData();
+  const { leads, todayFollowUps, overdueFollowUps, pipelineCounts, updateFollowUp } = useData();
+  const { member } = useAuth();
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -53,27 +55,27 @@ export default function DashboardScreen() {
       >
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.greeting}>Hey, {user?.name || 'Agent'}</Text>
+            <Text style={styles.greeting}>Hey, {member?.name || 'Agent'}</Text>
             <Text style={styles.dateText}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/admin');
-              }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/calendar'); }}
               style={styles.iconBtn}
             >
-              <Feather name="settings" size={20} color={Colors.black} />
+              <Feather name="calendar" size={20} color={Colors.black} />
             </Pressable>
             <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/advanced-filters');
-              }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/advanced-filters'); }}
               style={styles.iconBtn}
             >
               <Feather name="filter" size={20} color={Colors.black} />
+            </Pressable>
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/admin'); }}
+              style={styles.iconBtn}
+            >
+              <Feather name="settings" size={20} color={Colors.black} />
             </Pressable>
           </View>
         </View>
@@ -177,20 +179,20 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <SectionHeader title="Pipeline" action="View All" onAction={() => router.push('/(tabs)/pipeline')} />
           <View style={styles.pipelineRow}>
-            {(['inquiry', 'site_visit', 'negotiation', 'offer', 'closed'] as const).map((status, i) => (
+            {(['inquiry', 'site_visit', 'negotiation', 'offer', 'deal_done'] as const).map((status, i) => (
               <View key={status} style={styles.pipelineItem}>
                 <View style={[styles.pipelineDot, {
-                  backgroundColor: status === 'closed' ? Colors.green
+                  backgroundColor: status === 'deal_done' ? Colors.green
                     : status === 'negotiation' ? Colors.yellowWarning
                     : status === 'offer' ? Colors.primaryYellow
                     : Colors.charcoal,
                 }]}>
-                  <Text style={[styles.pipelineCount, status !== 'closed' && status !== 'negotiation' && status !== 'offer' && { color: Colors.white }]}>
+                  <Text style={[styles.pipelineCount, status !== 'deal_done' && status !== 'negotiation' && status !== 'offer' && { color: Colors.white }]}>
                     {pipelineCounts[status]}
                   </Text>
                 </View>
                 <Text style={styles.pipelineLabel}>
-                  {status === 'site_visit' ? 'Visit' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status === 'site_visit' ? 'Visit' : status === 'deal_done' ? 'Done' : status.charAt(0).toUpperCase() + status.slice(1)}
                 </Text>
                 {i < 4 && <Feather name="chevron-right" size={12} color={Colors.gray} style={{ position: 'absolute', right: -8, top: 8 }} />}
               </View>

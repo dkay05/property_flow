@@ -11,7 +11,7 @@ import { formatPhone, formatBudget, formatDate, formatTime, statusLabel, sourceL
 import { LeadStatus, AIMatch, BlacklistEntry } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
 
-const STATUSES: LeadStatus[] = ['inquiry', 'site_visit', 'negotiation', 'offer', 'closed', 'dead'];
+const STATUSES: LeadStatus[] = ['inquiry', 'site_visit', 'negotiation', 'offer', 'deal_done', 'lost'];
 
 function AIMatchCard({ match, property, onResponse }: {
   match: AIMatch;

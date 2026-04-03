@@ -16,8 +16,8 @@ const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: 'Visit', value: 'site_visit' },
   { label: 'Negotiation', value: 'negotiation' },
   { label: 'Offer', value: 'offer' },
-  { label: 'Closed', value: 'closed' },
-  { label: 'Dead', value: 'dead' },
+  { label: 'Deal Done', value: 'deal_done' },
+  { label: 'Lost', value: 'lost' },
 ];
 
 export default function LeadsScreen() {

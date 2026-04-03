@@ -122,6 +122,8 @@ export function StatusBadge({ status, small }: StatusBadgeProps) {
     site_visit: { bg: Colors.primaryYellow, text: Colors.black },
     negotiation: { bg: Colors.yellowWarning, text: Colors.black },
     offer: { bg: Colors.primaryYellow, text: Colors.black },
+    deal_done: { bg: Colors.green, text: Colors.white },
+    lost: { bg: Colors.gray, text: Colors.white },
     closed: { bg: Colors.green, text: Colors.white },
     dead: { bg: Colors.gray, text: Colors.white },
     available: { bg: Colors.green, text: Colors.white },

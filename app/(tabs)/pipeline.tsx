@@ -14,7 +14,7 @@ const PIPELINE_STAGES: { status: LeadStatus; color: string; icon: keyof typeof F
   { status: 'site_visit', color: Colors.primaryYellow, icon: 'map-pin' },
   { status: 'negotiation', color: Colors.yellowWarning, icon: 'message-circle' },
   { status: 'offer', color: Colors.primaryYellow, icon: 'file-text' },
-  { status: 'closed', color: Colors.green, icon: 'check-circle' },
+  { status: 'deal_done', color: Colors.green, icon: 'check-circle' },
 ];
 
 export default function PipelineScreen() {
@@ -23,11 +23,11 @@ export default function PipelineScreen() {
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
-  const totalDeals = leads.filter(l => l.status !== 'dead').length;
-  const closedDeals = leads.filter(l => l.status === 'closed').length;
+  const totalDeals = leads.filter(l => l.status !== 'lost').length;
+  const closedDeals = leads.filter(l => l.status === 'deal_done').length;
   const conversionRate = totalDeals > 0 ? Math.round((closedDeals / totalDeals) * 100) : 0;
-  const totalPipelineValue = deals.reduce((sum, d) => d.status !== 'closed' ? sum + d.offerPrice : sum, 0);
-  const totalCommission = deals.filter(d => d.status === 'closed').reduce((sum, d) => sum + d.commissionAmount, 0);
+  const totalPipelineValue = deals.reduce((sum, d) => d.status !== 'deal_done' ? sum + d.offerPrice : sum, 0);
+  const totalCommission = deals.filter(d => d.status === 'deal_done').reduce((sum, d) => sum + d.commissionAmount, 0);
 
   const getLeadsForStage = (status: LeadStatus) => leads.filter(l => l.status === status);
 
@@ -67,7 +67,7 @@ export default function PipelineScreen() {
             <View key={stage.status} style={styles.stageSection}>
               <View style={styles.stageHeader}>
                 <View style={[styles.stageIconCircle, { backgroundColor: stage.color }]}>
-                  <Feather name={stage.icon} size={16} color={stage.status === 'closed' ? Colors.white : Colors.black} />
+                  <Feather name={stage.icon} size={16} color={stage.status === 'deal_done' ? Colors.white : Colors.black} />
                 </View>
                 <Text style={styles.stageTitle}>{statusLabel(stage.status)}</Text>
                 <View style={styles.stageCount}>
@@ -124,18 +124,18 @@ export default function PipelineScreen() {
           );
         })}
 
-        {leads.some(l => l.status === 'dead') && (
+        {leads.some(l => l.status === 'lost') && (
           <View style={styles.stageSection}>
             <View style={styles.stageHeader}>
               <View style={[styles.stageIconCircle, { backgroundColor: Colors.gray }]}>
                 <Feather name="x-circle" size={16} color={Colors.white} />
               </View>
-              <Text style={styles.stageTitle}>Dead Leads</Text>
+              <Text style={styles.stageTitle}>Lost Leads</Text>
               <View style={styles.stageCount}>
-                <Text style={styles.stageCountText}>{pipelineCounts.dead}</Text>
+                <Text style={styles.stageCountText}>{pipelineCounts.lost}</Text>
               </View>
             </View>
-            {leads.filter(l => l.status === 'dead').map(lead => (
+            {leads.filter(l => l.status === 'lost').map(lead => (
               <Pressable
                 key={lead.id}
                 onPress={() => router.push({ pathname: '/lead/[id]', params: { id: lead.id } })}

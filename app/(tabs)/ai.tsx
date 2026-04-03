@@ -27,7 +27,7 @@ function AIMatchingSection() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [showLeadPicker, setShowLeadPicker] = useState(false);
 
-  const activeLeads = leads.filter(l => l.status !== 'closed' && l.status !== 'dead');
+  const activeLeads = leads.filter(l => l.status !== 'deal_done' && l.status !== 'lost');
   const selectedLead = leads.find(l => l.id === selectedLeadId);
 
   const handleSelectLead = useCallback(async (leadId: string) => {
@@ -253,13 +253,13 @@ function AIChatSection() {
     }
 
     if (q.includes('lead') || q.includes('client')) {
-      const activeLeads = leads.filter(l => l.status !== 'closed' && l.status !== 'dead');
+      const activeLeads = leads.filter(l => l.status !== 'deal_done' && l.status !== 'lost');
       const today = new Date().toISOString().split('T')[0];
 
       if (q.includes('follow-up') || q.includes('followup')) {
         const urgent = leads.filter(l => {
           const daysSinceUpdate = Math.floor((Date.now() - new Date(l.updatedAt).getTime()) / 86400000);
-          return daysSinceUpdate > 3 && l.status !== 'closed' && l.status !== 'dead';
+          return daysSinceUpdate > 3 && l.status !== 'deal_done' && l.status !== 'lost';
         });
         if (urgent.length === 0) return "All leads are up to date! Great job.";
         const list = urgent.slice(0, 3).map(l => `• ${l.name} (${l.status.replace('_', ' ')}) - ${Math.floor((Date.now() - new Date(l.updatedAt).getTime()) / 86400000)} days ago`).join('\n');
@@ -281,10 +281,10 @@ function AIChatSection() {
       return `Average available property price: ${formatCurrency(Math.round(avgPrice))}. Properties range from ${formatCurrency(Math.min(...properties.map(p => p.price)))} to ${formatCurrency(Math.max(...properties.map(p => p.price)))}.`;
     }
 
-    if (q.includes('sold') || q.includes('closed')) {
-      const closed = leads.filter(l => l.status === 'closed').length;
+    if (q.includes('sold') || q.includes('closed') || q.includes('deal')) {
+      const closed = leads.filter(l => l.status === 'deal_done').length;
       const sold = properties.filter(p => p.status === 'sold').length;
-      return `${closed} deals closed and ${sold} properties sold. Check the Pipeline tab for detailed conversion analytics.`;
+      return `${closed} deals done and ${sold} properties sold. Check the Pipeline tab for detailed conversion analytics.`;
     }
 
     const responses = [

@@ -60,6 +60,7 @@ function RootLayoutNav() {
         name="advanced-filters"
         options={{ presentation: "formSheet", sheetAllowedDetents: [0.9], sheetGrabberVisible: true, headerShown: false }}
       />
+      <Stack.Screen name="calendar" options={{ headerShown: false }} />
     </Stack>
   );
 }
