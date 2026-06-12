@@ -32,6 +32,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Pipeline</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="team">
+        <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
+        <Label>Team</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -113,6 +117,15 @@ function ClassicTabLayout() {
             <Ionicons name="bar-chart" size={size} color={color} />
           ),
           tabBarBadge: overdueFollowUps.length > 0 ? overdueFollowUps.length : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="team"
+        options={{
+          title: "Team",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-circle-outline" size={size} color={color} />
+          ),
         }}
       />
     </Tabs>
