@@ -25,7 +25,7 @@ function NativeTabLayout() {
         <Label>Properties</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ai">
-        <Icon sf={{ default: "sparkles", selected: "sparkles.fill" }} />
+        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
         <Label>AI Tools</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="pipeline">

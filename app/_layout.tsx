@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
-import { DataProvider } from "@/lib/data-context";
+import { DataProvider, useData } from "@/lib/data-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import {
   useFonts,
@@ -20,6 +20,7 @@ SplashScreen.preventAutoHideAsync();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const { refreshData } = useData();
   const segments = useSegments();
 
   useEffect(() => {
@@ -31,6 +32,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace("/(tabs)");
     }
   }, [isAuthenticated, isLoading, segments]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshData();
+    }
+  }, [isAuthenticated]);
 
   return <>{children}</>;
 }

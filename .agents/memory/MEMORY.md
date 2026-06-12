@@ -1,0 +1,2 @@
+- [DataProvider / auth bridge pattern](data-provider-auth-bridge.md) — do NOT import useAuth() inside DataProvider; use a bridge component in _layout.tsx instead
+- [DataContext useMemo stale refs](datacontext-stale-refs.md) — undefined variables in useMemo value/deps cause "Invalid hook call" in React, not a ReferenceError

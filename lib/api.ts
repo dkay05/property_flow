@@ -21,6 +21,13 @@ function getBaseUrl(): string {
   return `https://${domain}`;
 }
 
+type UnauthorizedHandler = () => void;
+let _unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler) {
+  _unauthorizedHandler = handler;
+}
+
 export async function api<T = any>(
   method: string,
   path: string,
@@ -39,6 +46,12 @@ export async function api<T = any>(
     headers,
     body: data ? JSON.stringify(data) : undefined,
   });
+
+  if (res.status === 401 && !options?.skipAuth) {
+    await clearToken();
+    _unauthorizedHandler?.();
+    throw new Error("Session expired. Please log in again.");
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => res.statusText);

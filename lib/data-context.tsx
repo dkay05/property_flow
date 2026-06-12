@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { api, getToken } from './api';
 import {
-  Lead, Property, Deal, FollowUp, Activity, UserProfile, LeadStatus,
+  Lead, Property, Deal, FollowUp, Activity, LeadStatus,
   PropertyStatusHistory, AIMatch, TeamMember, BlacklistEntry, SavedFilter,
   PropertyFilterCriteria, TeamPermissions,
 } from './types';
@@ -12,16 +12,12 @@ interface DataContextValue {
   deals: Deal[];
   followUps: FollowUp[];
   activities: Activity[];
-  user: UserProfile | null;
   isLoading: boolean;
   statusHistory: PropertyStatusHistory[];
   aiMatches: AIMatch[];
   teamMembers: TeamMember[];
   blacklist: BlacklistEntry[];
   savedFilters: SavedFilter[];
-
-  login: (name: string, phone: string) => Promise<void>;
-  logout: () => Promise<void>;
 
   addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Lead>;
   updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
@@ -154,7 +150,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [statusHistory, setStatusHistory] = useState<PropertyStatusHistory[]>([]);
   const [aiMatches, setAiMatches] = useState<AIMatch[]>([]);
@@ -166,8 +161,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const loadData = async () => {
     try {
-      const token = await getToken();
-      if (!token) { setIsLoading(false); return; }
       await refreshData();
     } catch (e) {
       console.error('DataProvider load error:', e);
@@ -178,6 +171,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const refreshData = useCallback(async () => {
     try {
+      const token = await getToken();
+      if (!token) return;
       const [l, p, d, f, tm, bl, sf] = await Promise.all([
         api<any[]>("GET", "/api/leads"),
         api<any[]>("GET", "/api/properties"),
@@ -198,13 +193,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('refreshData error:', e);
     }
   }, []);
-
-  const login = useCallback(async (name: string, phone: string) => {
-    const profile: UserProfile = { name, phone, role: 'agent', isLoggedIn: true };
-    setUser(profile);
-  }, []);
-
-  const logout = useCallback(async () => { setUser(null); }, []);
 
   const addLead = useCallback(async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Promise<Lead> => {
     const result = await api<any>("POST", "/api/leads", lead);
@@ -384,15 +372,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const todayFollowUps = useMemo(() => followUps.filter(f => f.date === today && f.status !== 'done'), [followUps, today]);
   const overdueFollowUps = useMemo(() => followUps.filter(f => f.date < today && f.status === 'pending'), [followUps, today]);
   const pipelineCounts = useMemo(() => {
-    const counts: Record<LeadStatus, number> = { inquiry: 0, site_visit: 0, negotiation: 0, deal_done: 0, lost: 0 };
+    const counts: Record<LeadStatus, number> = { inquiry: 0, site_visit: 0, negotiation: 0, offer: 0, deal_done: 0, lost: 0 };
     leads.forEach(l => { if (l.status in counts) counts[l.status as LeadStatus]++; });
     return counts;
   }, [leads]);
 
   const value = useMemo<DataContextValue>(() => ({
-    leads, properties, deals, followUps, activities, user, isLoading,
+    leads, properties, deals, followUps, activities, isLoading,
     statusHistory, aiMatches, teamMembers, blacklist, savedFilters,
-    login, logout, addLead, updateLead, deleteLead, addProperty, updateProperty,
+    addLead, updateLead, deleteLead, addProperty, updateProperty,
     addFollowUp, updateFollowUp, addActivity, changePropertyStatus,
     getLeadById, getPropertyById, getActivitiesForLead, getFollowUpsForLead, getDealsForLead,
     getStatusHistoryForProperty, getAIMatchesForLead, calculateAndSaveMatches, updateAIMatchResponse,
@@ -402,10 +390,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addToBlacklist, removeFromBlacklist, isPhoneBlacklisted, isEmailBlacklisted,
     saveFilter, deleteFilter, getFilteredProperties, refreshData,
   }), [
-    leads, properties, deals, followUps, activities, user, isLoading,
+    leads, properties, deals, followUps, activities, isLoading,
     statusHistory, aiMatches, teamMembers, blacklist, savedFilters,
     todayFollowUps, overdueFollowUps, pipelineCounts,
-    login, logout, addLead, updateLead, deleteLead, addProperty, updateProperty,
+    addLead, updateLead, deleteLead, addProperty, updateProperty,
     addFollowUp, updateFollowUp, addActivity, changePropertyStatus,
     getLeadById, getPropertyById, getActivitiesForLead, getFollowUpsForLead, getDealsForLead,
     getStatusHistoryForProperty, getAIMatchesForLead, calculateAndSaveMatches, updateAIMatchResponse,

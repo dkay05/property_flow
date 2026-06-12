@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { BrutalistButton, BrutalistInput, BrutalistCard } from '@/components/ui';
 import { useData } from '@/lib/data-context';
+import { useAuth } from '@/lib/auth-context';
 import { LeadSource, LeadStatus } from '@/lib/types';
 
 const SOURCES: { label: string; value: LeadSource }[] = [
@@ -17,7 +18,8 @@ const SOURCES: { label: string; value: LeadSource }[] = [
 ];
 
 export default function AddLeadScreen() {
-  const { addLead, user } = useData();
+  const { addLead } = useData();
+  const { member } = useAuth();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -44,7 +46,8 @@ export default function AddLeadScreen() {
         budgetMin: budgetMin ? parseInt(budgetMin) * 100000 : undefined,
         budgetMax: budgetMax ? parseInt(budgetMax) * 100000 : undefined,
         notes: notes.trim() || undefined,
-        assignedTo: user?.name,
+        assignedTo: member?.name,
+        assignedMemberId: member?.id,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();

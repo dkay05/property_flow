@@ -26,10 +26,11 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
 // POST /api/blacklist/:id/unblock
 router.post("/:id/unblock", requireAuth, async (req, res) => {
-  const [entry] = await db.select().from(blacklist).where(eq(blacklist.id, req.params.id));
+  const id = req.params.id as string;
+  const [entry] = await db.select().from(blacklist).where(eq(blacklist.id, id));
   if (!entry) return res.status(404).json({ message: "Entry not found" });
 
-  const [updated] = await db.update(blacklist).set({ isActive: false }).where(eq(blacklist.id, req.params.id)).returning();
+  const [updated] = await db.update(blacklist).set({ isActive: false }).where(eq(blacklist.id, id)).returning();
 
   if (entry.leadId) {
     const others = await db.select().from(blacklist).where(and(eq(blacklist.leadId, entry.leadId), eq(blacklist.isActive, true)));
@@ -41,7 +42,7 @@ router.post("/:id/unblock", requireAuth, async (req, res) => {
 });
 
 router.delete("/:id", requireAuth, requireRole("owner"), async (req, res) => {
-  await db.delete(blacklist).where(eq(blacklist.id, req.params.id));
+  await db.delete(blacklist).where(eq(blacklist.id, req.params.id as string));
   res.json({ success: true });
 });
 
