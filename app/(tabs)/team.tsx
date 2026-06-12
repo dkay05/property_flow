@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Switch, Modal, TextInput, Alert,
 } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -107,6 +108,13 @@ function MemberCard({ member, onEdit, onBlock, onUnblock, isCurrentUser }: {
       </View>
 
       <View style={styles.memberActions}>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/member/${member.id}`); }}
+          style={[styles.actionBtn, styles.statsBtn]}
+        >
+          <Feather name="bar-chart-2" size={14} color={Colors.charcoal} />
+          <Text style={styles.actionBtnText}>View Stats</Text>
+        </Pressable>
         <Pressable onPress={onEdit} style={styles.actionBtn}>
           <Feather name="settings" size={14} color={Colors.charcoal} />
           <Text style={styles.actionBtnText}>Permissions</Text>
@@ -475,6 +483,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.black,
   },
   actionBtnText: { fontFamily: 'DMSans_500Medium', fontSize: 12, color: Colors.charcoal },
+  statsBtn: { backgroundColor: Colors.primaryYellow, borderColor: Colors.black },
   blockBtn: { backgroundColor: '#FFE8E8', borderColor: Colors.red },
   unblockBtn: { backgroundColor: '#E8FFE8', borderColor: Colors.green },
   emptyCard: { alignItems: 'center', paddingVertical: 40, gap: 10, marginTop: 20 },
