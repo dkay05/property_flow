@@ -9,6 +9,7 @@ import { useData } from '@/lib/data-context';
 import { BrutalistCard, StatusBadge, EmptyState } from '@/components/ui';
 import { formatCurrency, furnishingLabel } from '@/lib/format';
 import { Property } from '@/lib/types';
+import { MediaThumbnail } from '@/components/PropertyMedia';
 
 const TYPE_FILTERS = [
   { label: 'All', value: 'all' },
@@ -34,14 +35,26 @@ export default function PropertiesScreen() {
     <Pressable onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id } })}>
       <BrutalistCard style={styles.propCard}>
         <View style={styles.propHeader}>
-          <View style={styles.propIconBox}>
-            <Ionicons
-              name={item.propertyType === 'commercial' ? 'business' : item.propertyType === 'land' ? 'map' : 'home'}
-              size={24}
-              color={Colors.black}
-            />
+          {item.images?.length || item.videoUrl ? (
+            <MediaThumbnail images={item.images} videoUrl={item.videoUrl} size={44} />
+          ) : (
+            <View style={styles.propIconBox}>
+              <Ionicons
+                name={item.propertyType === 'commercial' ? 'business' : item.propertyType === 'land' ? 'map' : 'home'}
+                size={24}
+                color={Colors.black}
+              />
+            </View>
+          )}
+          <View style={styles.propHeaderRight}>
+            {item.videoUrl ? (
+              <View style={styles.videoBadge}>
+                <Feather name="play" size={10} color={Colors.white} />
+                <Text style={styles.videoBadgeText}>VIDEO</Text>
+              </View>
+            ) : null}
+            <StatusBadge status={item.status} small />
           </View>
-          <StatusBadge status={item.status} small />
         </View>
         <Text style={styles.propAddress}>{item.address}</Text>
         <Text style={styles.propArea}>{item.area}, {item.city}</Text>
@@ -115,7 +128,7 @@ export default function PropertiesScreen() {
         )}
         showsHorizontalScrollIndicator={false}
         style={styles.filterRow}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
       />
 
       <FlatList
@@ -142,6 +155,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
     marginTop: 12,
+    flexShrink: 0,
   },
   title: {
     fontFamily: 'DMSans_800ExtraBold',
@@ -163,7 +177,7 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 3,
   },
-  filterRow: { marginBottom: 12, flexGrow: 0 },
+  filterRow: { marginBottom: 12, flexGrow: 0, flexShrink: 0, height: 36 },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -180,6 +194,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  propHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  videoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.red,
+    borderWidth: 1,
+    borderColor: Colors.black,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  videoBadgeText: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    color: Colors.white,
+    letterSpacing: 0.5,
   },
   propIconBox: {
     width: 44,

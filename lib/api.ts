@@ -18,7 +18,25 @@ export async function clearToken(): Promise<void> {
 function getBaseUrl(): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (!domain) throw new Error("EXPO_PUBLIC_DOMAIN not set");
-  return `https://${domain}`;
+  if (/^https?:\/\//.test(domain)) return domain;
+  const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.)/.test(domain);
+  return `${isLocal ? "http" : "https"}://${domain}`;
+}
+
+/** The API origin, also used to build public share links. */
+export function getApiBaseUrl(): string {
+  return getBaseUrl();
+}
+
+/**
+ * Uploaded media is stored as a server-relative path ("/uploads/x.jpg") so it
+ * survives a domain change. Image components need an absolute url, and remote
+ * urls (YouTube thumbnails, pasted links) are passed through untouched.
+ */
+export function resolveMediaUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  if (/^(https?:|data:|file:|blob:)/.test(url)) return url;
+  return `${getBaseUrl()}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 type UnauthorizedHandler = () => void;

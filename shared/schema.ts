@@ -59,6 +59,7 @@ export const properties = pgTable("properties", {
   ownerName: text("owner_name"),
   ownerPhone: text("owner_phone"),
   images: jsonb("images").default(sql`'[]'::jsonb`),
+  videoUrl: text("video_url"),
   latitude: decimal("latitude"),
   longitude: decimal("longitude"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

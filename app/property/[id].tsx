@@ -11,6 +11,9 @@ import { useData } from '@/lib/data-context';
 import { BrutalistCard, BrutalistButton, StatusBadge, EmptyState } from '@/components/ui';
 import { formatCurrency, furnishingLabel, formatDate } from '@/lib/format';
 import { PropertyStatus, PropertyStatusHistory } from '@/lib/types';
+import { MediaEditor, MediaGallery } from '@/components/PropertyMedia';
+import { shareProperty, propertyShareUrl } from '@/lib/share';
+import { formatCurrency as fmtPrice } from '@/lib/format';
 
 const STATUS_OPTIONS: { status: PropertyStatus; label: string; color: string; icon: string }[] = [
   { status: 'available', label: 'Available', color: Colors.green, icon: 'check-circle' },
@@ -109,11 +112,69 @@ function StatusHistoryItem({ item }: { item: PropertyStatusHistory }) {
   );
 }
 
+function MediaModal({
+  initialImages,
+  initialVideoUrl,
+  onClose,
+  onSave,
+}: {
+  initialImages: string[];
+  initialVideoUrl: string;
+  onClose: () => void;
+  onSave: (images: string[], videoUrl: string) => Promise<void>;
+}) {
+  const [images, setImages] = useState<string[]>(initialImages);
+  const [videoUrl, setVideoUrl] = useState(initialVideoUrl);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(images, videoUrl.trim());
+    } catch (e: any) {
+      Alert.alert('Could not save media', e?.message || 'Please try again');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Photos & Video</Text>
+            <Pressable onPress={onClose}>
+              <Feather name="x" size={22} color={Colors.black} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
+            <MediaEditor
+              images={images}
+              videoUrl={videoUrl}
+              onChangeImages={setImages}
+              onChangeVideoUrl={setVideoUrl}
+            />
+          </ScrollView>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            <BrutalistButton title="Cancel" onPress={onClose} variant="secondary" style={{ flex: 1 }} />
+            <BrutalistButton title="Save Media" onPress={handleSave} variant="charcoal" loading={saving} style={{ flex: 1 }} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function PropertyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getPropertyById, changePropertyStatus, getStatusHistoryForProperty } = useData();
+  const { getPropertyById, changePropertyStatus, getStatusHistoryForProperty, updateProperty } = useData();
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  const [shareNote, setShareNote] = useState('');
 
   const property = getPropertyById(id);
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -137,6 +198,32 @@ export default function PropertyDetailScreen() {
     setShowStatusModal(false);
   };
 
+  const handleSaveMedia = async (images: string[], videoUrl: string) => {
+    await updateProperty(id, { images, videoUrl: videoUrl || undefined });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowMediaModal(false);
+  };
+
+  const handleShare = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const result = await shareProperty({
+        propertyId: id,
+        title: property.address,
+        message: `${property.address}, ${property.area} — ${fmtPrice(property.price)}`,
+      });
+      if (result === 'copied') {
+        setShareNote('Link copied to clipboard');
+        setTimeout(() => setShareNote(''), 2500);
+      } else if (result === 'unavailable') {
+        Alert.alert('Share link', propertyShareUrl(id));
+      }
+    } catch (e: any) {
+      Alert.alert('Could not share', e?.message || 'Please try again');
+    }
+  };
+
+  const hasMedia = !!(property.images?.length || property.videoUrl);
   const currentStatusOpt = STATUS_OPTIONS.find(s => s.status === property.status);
 
   return (
@@ -187,6 +274,30 @@ export default function PropertyDetailScreen() {
           </View>
           {statusHistory.length > 0 && (
             <Text style={styles.historyCount}>{statusHistory.length} status change{statusHistory.length > 1 ? 's' : ''} recorded</Text>
+          )}
+        </BrutalistCard>
+
+        <BrutalistCard style={styles.detailCard}>
+          <View style={styles.mediaHeaderRow}>
+            <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>PHOTOS & VIDEO</Text>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowMediaModal(true);
+              }}
+              style={styles.mediaEditBtn}
+            >
+              <Feather name={hasMedia ? 'edit-3' : 'plus'} size={13} color={Colors.black} />
+              <Text style={styles.mediaEditText}>{hasMedia ? 'Edit' : 'Add'}</Text>
+            </Pressable>
+          </View>
+
+          {hasMedia ? (
+            <View style={{ marginTop: 12 }}>
+              <MediaGallery images={property.images} videoUrl={property.videoUrl} />
+            </View>
+          ) : (
+            <Text style={styles.mediaEmpty}>No photos or video yet. Tap Add to upload images or paste a YouTube link.</Text>
           )}
         </BrutalistCard>
 
@@ -254,6 +365,23 @@ export default function PropertyDetailScreen() {
           </BrutalistCard>
         )}
 
+        <BrutalistCard style={styles.shareCard}>
+          <Text style={styles.sectionLabel}>SHARE THIS PROPERTY</Text>
+          <Text style={styles.shareHint}>
+            Anyone with the link can view a clean listing page — photos, video and details. No login needed.
+          </Text>
+          <Pressable onPress={handleShare} style={styles.shareBtn}>
+            <Feather name="share-2" size={18} color={Colors.black} />
+            <Text style={styles.shareBtnText}>Share Property</Text>
+          </Pressable>
+          {shareNote ? (
+            <View style={styles.shareNoteRow}>
+              <Feather name="check-circle" size={13} color={Colors.green} />
+              <Text style={styles.shareNote}>{shareNote}</Text>
+            </View>
+          ) : null}
+        </BrutalistCard>
+
         {statusHistory.length > 0 && (
           <BrutalistCard style={styles.detailCard}>
             <Text style={styles.sectionLabel}>STATUS HISTORY</Text>
@@ -267,6 +395,15 @@ export default function PropertyDetailScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {showMediaModal && (
+        <MediaModal
+          initialImages={property.images ?? []}
+          initialVideoUrl={property.videoUrl ?? ''}
+          onClose={() => setShowMediaModal(false)}
+          onSave={handleSaveMedia}
+        />
+      )}
 
       {showStatusModal && (
         <StatusToggleModal
@@ -344,6 +481,32 @@ const styles = StyleSheet.create({
   historyTo: { fontFamily: 'DMSans_700Bold', fontSize: 13 },
   historyReason: { fontFamily: 'DMSans_400Regular', fontSize: 12, color: Colors.charcoal, marginTop: 3 },
   historyMeta: { fontFamily: 'DMSans_400Regular', fontSize: 11, color: Colors.gray, marginTop: 2 },
+  shareCard: { marginBottom: 12, backgroundColor: Colors.primaryYellow },
+  shareHint: {
+    fontFamily: 'DMSans_400Regular', fontSize: 13, color: Colors.charcoal, marginBottom: 12,
+  },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.black,
+    paddingVertical: 13,
+    shadowColor: Colors.black, shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1, shadowRadius: 0, elevation: 3,
+  },
+  shareBtnText: { fontFamily: 'DMSans_700Bold', fontSize: 15, color: Colors.black },
+  shareNoteRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10,
+  },
+  shareNote: { fontFamily: 'DMSans_500Medium', fontSize: 12, color: Colors.charcoal },
+  mediaHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mediaEditBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: Colors.primaryYellow, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 2, borderColor: Colors.black,
+  },
+  mediaEditText: { fontFamily: 'DMSans_700Bold', fontSize: 12, color: Colors.black },
+  mediaEmpty: {
+    fontFamily: 'DMSans_400Regular', fontSize: 13, color: Colors.gray, marginTop: 10,
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: Colors.white, padding: 20, borderTopWidth: 2, borderTopColor: Colors.black,

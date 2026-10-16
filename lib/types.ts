@@ -43,6 +43,7 @@ export interface Property {
   ownerName?: string;
   ownerPhone?: string;
   images?: string[];
+  videoUrl?: string;
   latitude?: number;
   longitude?: number;
   createdAt: string;

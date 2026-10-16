@@ -121,6 +121,7 @@ function mapProperty(p: any): Property {
     amenities: Array.isArray(p.amenities) ? p.amenities : [],
     ownerName: p.ownerName, ownerPhone: p.ownerPhone,
     images: Array.isArray(p.images) ? p.images : [],
+    videoUrl: p.videoUrl ?? undefined,
     latitude: p.latitude, longitude: p.longitude,
     createdAt: p.createdAt,
   };

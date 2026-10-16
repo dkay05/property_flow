@@ -6,6 +6,7 @@ import Colors from '@/constants/colors';
 import { BrutalistButton, BrutalistInput } from '@/components/ui';
 import { useData } from '@/lib/data-context';
 import { PropertyType } from '@/lib/types';
+import { MediaEditor } from '@/components/PropertyMedia';
 
 const PROPERTY_TYPES: { label: string; value: PropertyType }[] = [
   { label: 'Residential', value: 'residential' },
@@ -34,6 +35,8 @@ export default function AddPropertyScreen() {
   const [amenities, setAmenities] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
+  const [images, setImages] = useState<string[]>([]);
+  const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
@@ -54,6 +57,8 @@ export default function AddPropertyScreen() {
         amenities: amenities ? amenities.split(',').map(a => a.trim()).filter(Boolean) : [],
         ownerName: ownerName.trim() || undefined,
         ownerPhone: ownerPhone.trim() || undefined,
+        images,
+        videoUrl: videoUrl.trim() || undefined,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -116,6 +121,13 @@ export default function AddPropertyScreen() {
         <BrutalistInput label="Amenities (comma separated)" value={amenities} onChangeText={setAmenities} placeholder="Gym, Pool, Parking" style={{ marginTop: 14 }} />
         <BrutalistInput label="Owner Name" value={ownerName} onChangeText={setOwnerName} placeholder="Owner name" style={{ marginTop: 14 }} />
         <BrutalistInput label="Owner Phone" value={ownerPhone} onChangeText={setOwnerPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" style={{ marginTop: 14 }} />
+
+        <MediaEditor
+          images={images}
+          videoUrl={videoUrl}
+          onChangeImages={setImages}
+          onChangeVideoUrl={setVideoUrl}
+        />
 
         <BrutalistButton
           title="Save Property"

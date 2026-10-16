@@ -117,7 +117,7 @@ export default function LeadsScreen() {
         )}
         showsHorizontalScrollIndicator={false}
         style={styles.filterRow}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
       />
 
       <FlatList
@@ -144,6 +144,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
     marginTop: 12,
+    flexShrink: 0,
   },
   title: {
     fontFamily: 'DMSans_800ExtraBold',
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.black,
   },
-  filterRow: { marginBottom: 12, flexGrow: 0 },
+  filterRow: { marginBottom: 12, flexGrow: 0, flexShrink: 0, height: 36 },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,

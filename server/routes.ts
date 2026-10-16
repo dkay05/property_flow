@@ -13,6 +13,8 @@ import dealsRouter from "./routes/deals";
 import blacklistRouter from "./routes/blacklist";
 import dashboardRouter from "./routes/dashboard";
 import filtersRouter from "./routes/filters";
+import uploadsRouter from "./routes/uploads";
+import publicRouter from "./routes/public";
 
 async function seedDatabase() {
   try {
@@ -109,6 +111,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/blacklist", blacklistRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/filters", filtersRouter);
+  app.use("/api/uploads", uploadsRouter);
+
+  // Public, unauthenticated share pages.
+  app.use("/", publicRouter);
 
   await seedDatabase();
 
