@@ -13,7 +13,9 @@
     "db:push": "drizzle-kit push",
     "start": "npx expo start",
     "lint": "npx expo lint",
-    "lint:fix": "npx expo lint --fix"
+    "lint:fix": "npx expo lint --fix",
+    "build:web": "node scripts/check-web-env.js && npx expo export --platform web --output-dir dist",
+    "vercel-build": "npm run build:web"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

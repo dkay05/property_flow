@@ -27,6 +27,16 @@ function setupCors(app: express.Application) {
       });
     }
 
+    // The web app is deployed separately (Vercel), so its origin differs from
+    // this server's. List it in ALLOWED_ORIGINS as a full origin, e.g.
+    // "https://property-flow.vercel.app,https://app.example.com".
+    if (process.env.ALLOWED_ORIGINS) {
+      process.env.ALLOWED_ORIGINS.split(",").forEach((o) => {
+        const trimmed = o.trim().replace(/\/$/, "");
+        if (trimmed) origins.add(trimmed);
+      });
+    }
+
     const origin = req.header("origin");
 
     // Allow localhost origins for Expo web development (any port)
@@ -34,7 +44,16 @@ function setupCors(app: express.Application) {
       origin?.startsWith("http://localhost:") ||
       origin?.startsWith("http://127.0.0.1:");
 
-    if (origin && (origins.has(origin) || isLocalhost)) {
+    // Vercel gives every preview deployment a fresh *.vercel.app hostname, so
+    // they cannot be enumerated ahead of time. Auth is Bearer-token based, so
+    // a foreign origin still cannot read a user's token. Set
+    // ALLOW_VERCEL_PREVIEWS=false to lock this down to ALLOWED_ORIGINS only.
+    const isVercelPreview =
+      process.env.ALLOW_VERCEL_PREVIEWS !== "false" &&
+      !!origin &&
+      /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.vercel\.app$/i.test(origin);
+
+    if (origin && (origins.has(origin) || isLocalhost || isVercelPreview)) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
