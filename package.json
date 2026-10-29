@@ -15,7 +15,8 @@
     "lint": "npx expo lint",
     "lint:fix": "npx expo lint --fix",
     "build:web": "node scripts/check-web-env.js && npx expo export --platform web --output-dir dist",
-    "vercel-build": "npm run build:web"
+    "vercel-build": "npm run build:web",
+    "test": "npx tsx lib/__tests__/api-base.test.ts"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

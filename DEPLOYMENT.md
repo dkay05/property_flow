@@ -29,8 +29,18 @@ Use the host only — no `https://`, no trailing slash, no `/api`.
 This is the single most important setting. Metro **inlines** `EXPO_PUBLIC_*`
 variables into the JavaScript bundle at build time, so the API origin is frozen
 when `expo export` runs. Changing it later requires a **redeploy**, not a
-restart. The build fails with an explanatory message if it is missing or still
-points at `localhost` (see `scripts/check-web-env.js`).
+restart.
+
+The build never fails over this. If the variable is missing, or still points at
+`localhost`, the site deploys and renders anyway and the app falls back to
+sending API requests to its own origin, logging a console warning that says so.
+A site that loads and reports a failed request is much easier to diagnose than
+a red build or a blank page. `scripts/check-web-env.js` prints the same warning
+in the build log.
+
+Until you set it, the app loads and shows the login screen, but logging in
+fails with "Could not reach the server at ...". That is the expected state of a
+frontend with no backend wired up yet, not a broken deploy.
 
 ### 2. Build settings
 
@@ -78,8 +88,12 @@ the Replit host:
 
 ```bash
 npm run build:web     # writes dist/
+npm test              # checks API origin resolution
 npx serve dist        # optional: preview the export
 ```
+
+Note that `npx serve dist` serves files only. To reproduce Vercel's catch-all
+rewrite (so deep links like `/properties` work on refresh) use `npx serve -s dist`.
 
 A local build uses `EXPO_PUBLIC_DOMAIN` from `.env`. See `.env.example` for
 every variable both halves expect.

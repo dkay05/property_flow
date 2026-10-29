@@ -1,5 +1,6 @@
 import { fetch } from "expo/fetch";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { resolveApiBase } from "./api-base";
 
 const TOKEN_KEY = "@propertyflow_token";
 
@@ -15,12 +16,24 @@ export async function clearToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
+/** The page's own origin on web, or undefined anywhere else. */
+function webOrigin(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return window.location?.origin || undefined;
+}
+
+let warnedAboutBase = false;
+
 function getBaseUrl(): string {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (!domain) throw new Error("EXPO_PUBLIC_DOMAIN not set");
-  if (/^https?:\/\//.test(domain)) return domain;
-  const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.)/.test(domain);
-  return `${isLocal ? "http" : "https"}://${domain}`;
+  const resolved = resolveApiBase(process.env.EXPO_PUBLIC_DOMAIN, webOrigin());
+
+  if (resolved.warning && !warnedAboutBase) {
+    warnedAboutBase = true;
+    console.warn(`[api] ${resolved.warning}`);
+  }
+
+  if (resolved.origin === null) throw new Error(resolved.warning);
+  return resolved.origin;
 }
 
 /** The API origin, also used to build public share links. */
@@ -59,11 +72,22 @@ export async function api<T = any>(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: data ? JSON.stringify(data) : undefined,
-  });
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  } catch (cause) {
+    // A network-level failure says nothing about which host was tried, which
+    // is the one thing worth knowing when a deployment points somewhere wrong.
+    throw new Error(
+      `Could not reach the server at ${base}. Check that the backend is ` +
+        `running and that this site's origin is allowed by its CORS config.`,
+      { cause },
+    );
+  }
 
   if (res.status === 401 && !options?.skipAuth) {
     await clearToken();
